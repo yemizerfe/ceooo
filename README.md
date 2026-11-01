@@ -1,6 +1,8 @@
 # CEOOO
 
-AI-Powered Business Management & Executive Workspace
+**AI-Powered Business Management & Executive Workspace**
+
+
 
 CEOOO is a business management platform that brings executive dashboards, financial insights, business tools, and third-party integrations into a unified workspace. It combines centralized business information with AI-assisted analysis to support business operations and decision-making.
 
@@ -54,14 +56,14 @@ CEOOO uses Docker Compose for containerized deployment.
 
 Clone the repository:
 
-
+```bash
 git clone https://github.com/yemizerfe/ceooo.git
 cd ceooo
-
+```
 
 ### Configuration
 
-Private environment configuration is not included in this repository.
+**Private environment configuration is not included in this repository.**
 
 CEOOO does not distribute its `.env` files, API keys, OAuth credentials, database credentials, JWT secrets, or other private application configuration.
 
@@ -75,22 +77,27 @@ To run your own instance:
 
 ### Start the Application
 
-   docker compose up --build -d
-
+```bash
+docker compose up --build -d
+```
 
 To view running containers:
 
-   docker compose ps
+```bash
+docker compose ps
+```
 
 To inspect application logs:
 
-   docker compose logs -f
-
+```bash
+docker compose logs -f
+```
 
 To stop the application:
 
-
-   docker compose down
+```bash
+docker compose down
+```
 
 Refer to the Docker Compose configuration and application requirements for the environment variables and services required by your deployment.
 
