@@ -75,22 +75,22 @@ To run your own instance:
 
 ### Start the Application
 
-docker compose up --build -d
+   docker compose up --build -d
 
 
 To view running containers:
 
-docker compose ps
+   docker compose ps
 
 To inspect application logs:
 
-docker compose logs -f
+   docker compose logs -f
 
 
 To stop the application:
 
 
-docker compose down
+   docker compose down
 
 Refer to the Docker Compose configuration and application requirements for the environment variables and services required by your deployment.
 
