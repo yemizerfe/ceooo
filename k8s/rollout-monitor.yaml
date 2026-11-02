@@ -1,0 +1,48 @@
+# =============================================================================
+# CEOOO — Rollout safety configuration
+#
+# These annotations + a small readiness gate pattern make sure new pods are
+# healthy before traffic is shifted, and that a bad deploy can be rolled back.
+#
+# Usage:
+#   kubectl rollout status deployment/ceooo-server -n ceooo
+#   kubectl rollout undo deployment/ceooo-server -n ceooo
+# =============================================================================
+# The Deployment resources above already include:
+#   - maxUnavailable: 0   (no pod is taken down until the new one is ready)
+#   - readinessProbe on /health
+#   - livenessProbe on /health
+#
+# To enable progressive delivery (canary / blue-green), you would layer one
+# of these on top:
+#
+#   1. Argo Rollouts
+#        kind: Rollout  (instead of Deployment)
+#        strategy: canary / blueGreen
+#        trafficRouting: istio / nginx
+#
+#   2. Flagger + Istio/Linkerd/Nginx
+#        Automated canary analysis with Prometheus metrics.
+#
+#   3. Simple replica-based canary (no extra tooling):
+#        kubectl scale deployment ceooo-server --replicas=3 -n ceooo
+#        kubectl patch deployment ceooo-server -n ceooo -p '{"spec":{"template":{"metadata":{"annotations":{"special-canary":"true"}}}}}'
+#        Wait for canary pods to pass health checks, then progressively shift
+#        traffic via Ingress weighting or a service mesh.
+# =============================================================================
+
+# ---- Pod Disruption Budget ( protects availability during voluntary disruptions ) ----
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ceooo-server-pdb
+  namespace: ceooo
+  labels:
+    app: ceooo
+    component: server
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ceooo
+      component: server

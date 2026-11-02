@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ceooo-config
+  namespace: ceooo
+data:
+  # ---- Runtime ----
+  NODE_ENV: "production"
+  PORT: "5010"
+  LOG_LEVEL: "info"
+  FRONTEND_URL: "https://ceooo.example.com"
+  # Public API origin used for OAuth provider redirect URLs.
+  BACKEND_URL: "https://ceooo.example.com"
+  GOOGLE_CALLBACK_URL: "https://ceooo.example.com/api/auth/google/callback"
+  GITHUB_CALLBACK_URL: "https://ceooo.example.com/api/auth/github/callback"
+  # Comma-separated list is also accepted by the API's CORS allow-list.
+  TRUST_PROXY_HOPS: "1"
+
+  # ---- Database (host/service name; credentials come from the Secret) ----
+  DB_HOST: "postgres-service.ceooo.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: "ceooo"
+  DB_USER: "ceooo_app"
+
+  # ---- Redis (host/service name; credentials from Secret) ----
+  REDIS_HOST: "redis-service.ceooo.svc.cluster.local"
+  REDIS_PORT: "6379"
+
+  # ---- AI ----
+  AI_PROVIDER: "google-gemini"
+  GEMINI_MODEL: "gemini-2.5-flash"
+  AI_TIMEOUT: "60000"
+  AI_MAX_RETRIES: "3"
+  AI_CACHE_TTL: "300"
+  AI_ENABLE_ANALYTICS: "false"
+
+  # ---- SMTP (server-side only; leave blank to disable email features) ----
+  SMTP_PORT: "587"
+  SMTP_FROM: "no-reply@ceooo.example.com"
+
+  # ---- Feature flags (mirror AdminSetting defaults; kept here so you can
+  #      toggle without a database deploy) ----
+  FEATURE_FLAG_AI_ASSISTANT: "true"
+  FEATURE_FLAG_ADVANCED_ANALYTICS: "true"
+  FEATURE_FLAG_BUDGET_FORECASTING: "true"
+  FEATURE_FLAG_OKR_INSIGHTS: "true"
+
+  # ---- Session / security policy defaults ----
+  SESSION_TIMEOUT_MINUTES: "10080"
+  MAX_LOGIN_ATTEMPTS: "10"
+  ALLOW_REGISTRATION: "true"
+  REQUIRE_STRONG_PASSWORD: "true"

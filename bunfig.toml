@@ -1,0 +1,16 @@
+[test]
+# Use bun's built-in test runner
+runner = "bun"
+
+[glob]
+# Match test files anywhere in the tree
+ignore = [
+  "node_modules/**",
+  "dist/**",
+  ".next/**",
+  "coverage/**",
+]
+
+[debug]
+# Enable sourcemaps for cleaner stack traces during tests
+sourcemap = "inline"

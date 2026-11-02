@@ -1,0 +1,167 @@
+# =============================================================================
+# CEOOO — Docker Compose (local + single-host production)
+#
+#   db       PostgreSQL 16
+#   redis    Redis 7 (cache/session backend)
+#   migrate  one-shot `prisma migrate deploy`, exits 0
+#   server   Bun + Express API on :5010
+#   client   Next.js standalone on :3000
+#
+# First run:
+#   test -f .env || cp .env.docker .env
+#   docker compose up -d db redis
+#   docker compose run --rm migrate
+#   docker compose up -d server client
+# =============================================================================
+
+x-server-env: &server-env
+  NODE_ENV: production
+  PORT: "5010"
+  DATABASE_URL: postgresql://${DB_USER:-ceooo_app}:${DB_PASSWORD:?set DB_PASSWORD in .env}@db:5432/${DB_NAME:-ceooo}?schema=public&connection_limit=10&pool_timeout=20
+  REDIS_URL: redis://redis:6379
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+  BACKEND_URL: ${BACKEND_URL:-http://localhost:5010}
+  NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-${BACKEND_URL:-http://localhost:5010}}
+  JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+  SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+  ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+  ADMIN_NAME: ${ADMIN_NAME:-}
+  ADMIN_RESET_PASSWORD: ${ADMIN_RESET_PASSWORD:-false}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-${BACKEND_URL:-http://localhost:5010}/api/auth/google/callback}
+  GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+  GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+  GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+  GITHUB_CALLBACK_URL: ${GITHUB_CALLBACK_URL:-${BACKEND_URL:-http://localhost:5010}/api/auth/github/callback}
+  GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+  AI_TIMEOUT: ${AI_TIMEOUT:-60000}
+  AI_MAX_RETRIES: ${AI_MAX_RETRIES:-3}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  SMTP_FROM: ${SMTP_FROM:-no-reply@ceooo.local}
+  ADMIN_PASSWORD_RESET: ${ADMIN_PASSWORD_RESET:-false}
+  UPLOADS_DIR: /app/uploads
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-ceooo_app}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      POSTGRES_DB: ${DB_NAME:-ceooo}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ceooo_app} -d ${DB_NAME:-ceooo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [ceooo]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [ceooo]
+
+  migrate:
+    build:
+      context: .
+      target: server
+    image: ${SERVER_IMAGE:-ceooo-server:latest}
+    command: ["bunx", "prisma", "migrate", "deploy"]
+    environment: *server-env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    networks: [ceooo]
+
+  server:
+    build:
+      context: .
+      target: server
+    image: ${SERVER_IMAGE:-ceooo-server:latest}
+    restart: unless-stopped
+    environment: *server-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${SERVER_PORT:-5010}:5010"
+    volumes:
+      - uploads_data:/app/uploads
+    tmpfs:
+      - /tmp:size=64m
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:5010/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks: [ceooo]
+
+  client:
+    build:
+      context: .
+      target: client
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-${BACKEND_URL:-http://localhost:5010}}
+    image: ${CLIENT_IMAGE:-ceooo-client:latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      server:
+        condition: service_healthy
+    ports:
+      - "${CLIENT_PORT:-3000}:3000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks: [ceooo]
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+
+networks:
+  ceooo:
+    driver: bridge

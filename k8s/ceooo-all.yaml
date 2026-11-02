@@ -1,0 +1,1348 @@
+
+---
+# namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ceooo
+  labels:
+    name: ceooo
+    app.kubernetes.io/part-of: ceooo
+    environment: production
+
+---
+# configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ceooo-config
+  namespace: ceooo
+data:
+  # ---- Runtime ----
+  NODE_ENV: "production"
+  PORT: "5010"
+  LOG_LEVEL: "info"
+  FRONTEND_URL: "https://ceooo.example.com"
+  # Public API origin used for OAuth provider redirect URLs.
+  BACKEND_URL: "https://ceooo.example.com"
+  GOOGLE_CALLBACK_URL: "https://ceooo.example.com/api/auth/google/callback"
+  GITHUB_CALLBACK_URL: "https://ceooo.example.com/api/auth/github/callback"
+  # Comma-separated list is also accepted by the API's CORS allow-list.
+  TRUST_PROXY_HOPS: "1"
+
+  # ---- Database (host/service name; credentials come from the Secret) ----
+  DB_HOST: "postgres-service.ceooo.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: "ceooo"
+  DB_USER: "ceooo_app"
+
+  # ---- Redis (host/service name; credentials from Secret) ----
+  REDIS_HOST: "redis-service.ceooo.svc.cluster.local"
+  REDIS_PORT: "6379"
+
+  # ---- AI ----
+  AI_PROVIDER: "google-gemini"
+  GEMINI_MODEL: "gemini-2.5-flash"
+  AI_TIMEOUT: "60000"
+  AI_MAX_RETRIES: "3"
+  AI_CACHE_TTL: "300"
+  AI_ENABLE_ANALYTICS: "false"
+
+  # ---- SMTP (server-side only; leave blank to disable email features) ----
+  SMTP_PORT: "587"
+  SMTP_FROM: "no-reply@ceooo.example.com"
+
+  # ---- Feature flags (mirror AdminSetting defaults; kept here so you can
+  #      toggle without a database deploy) ----
+  FEATURE_FLAG_AI_ASSISTANT: "true"
+  FEATURE_FLAG_ADVANCED_ANALYTICS: "true"
+  FEATURE_FLAG_BUDGET_FORECASTING: "true"
+  FEATURE_FLAG_OKR_INSIGHTS: "true"
+
+  # ---- Session / security policy defaults ----
+  SESSION_TIMEOUT_MINUTES: "10080"
+  MAX_LOGIN_ATTEMPTS: "10"
+  ALLOW_REGISTRATION: "true"
+  REQUIRE_STRONG_PASSWORD: "true"
+
+---
+# postgres-statefulset.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: ceooo
+  labels:
+    app: postgres
+    component: database
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    app: postgres
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: ceooo
+  labels:
+    app: postgres
+    component: database
+spec:
+  serviceName: postgres-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        component: database
+    spec:
+      securityContext:
+        # Privileged container not required; run as non-root where possible.
+        # The official postgres image handles runtime user 999 (postgres).
+        runAsNonRoot: true
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: DB_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: DB_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: DB_NAME
+            - name: PGDATA
+              value: "/var/lib/postgresql/data/pgdata"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          # Prevent a single runaway query from starving the node.
+          securityContext:
+            allowPrivilegeEscalation: false
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: ceooo
+  labels:
+    app: postgres
+    component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  # In cloud environments, replace with a storageClass that matches your
+  # provider (e.g. gp3 on AWS, premium-ssd on GCP, standard on Azure).
+  # storageClassName: standard
+
+---
+# redis-statefulset.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: ceooo
+  labels:
+    app: redis
+    component: cache
+spec:
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis
+  selector:
+    app: redis
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: ceooo
+  labels:
+    app: redis
+    component: cache
+spec:
+  serviceName: redis-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        component: cache
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command:
+            - redis-server
+            - --save
+            - "60"
+            - "1"
+            - --loglevel
+            - notice
+            - --bind
+            - 0.0.0.0
+          ports:
+            - containerPort: 6379
+              name: redis
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: redis-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: ceooo
+  labels:
+    app: redis
+    component: cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  # storageClassName: standard
+
+---
+# migrate-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: prisma-migrate
+  namespace: ceooo
+  labels:
+    app: prisma-migrate
+  annotations:
+    "helm.sh/hook": "pre-install,pre-upgrade"
+spec:
+  activeDeadlineSeconds: 300
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: prisma-migrate
+        component: migration
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+      initContainers:
+        - name: wait-for-db
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              echo "Waiting for postgres-service.ceooo.svc.cluster.local:5432..."
+              for i in $(seq 1 30); do
+                if nc -z postgres-service.ceooo.svc.cluster.local 5432; then
+                  echo "Postgres is ready."
+                  exit 0
+                fi
+                echo "Attempt $i/30 — sleeping 2s..."
+                sleep 2
+              done
+              echo "Postgres did not become ready in time."
+              exit 1
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+      containers:
+        - name: migrate
+          image: ceooo-server:latest
+          imagePullPolicy: Always
+          args: ["migrate"]
+          env:
+            - name: HOME
+              value: /tmp
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: DB_PASSWORD
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: DB_NAME
+            - name: DATABASE_URL
+              value: "postgresql://$(DB_USER):$(DB_PASSWORD)@postgres-service.ceooo.svc.cluster.local:5432/$(DB_NAME)?schema=public"
+            - name: NODE_ENV
+              value: production
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+
+---
+# server-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ceooo-server
+  namespace: ceooo
+  labels:
+    app: ceooo
+    component: server
+    tier: backend
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: ceooo
+      component: server
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ceooo
+        component: server
+        tier: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5010"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Must exceed the app's drain window (10s) plus pool teardown.
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-db
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              until nc -z postgres-service.ceooo.svc.cluster.local 5432; do
+                echo "waiting for postgres..."
+                sleep 2
+              done
+              echo "postgres ready"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 32Mi
+        - name: wait-for-redis
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              # Redis is optional: warn and continue if it is not there.
+              for i in $(seq 1 15); do
+                if nc -z redis-service.ceooo.svc.cluster.local 6379; then
+                  echo "redis ready"; exit 0
+                fi
+                sleep 2
+              done
+              echo "redis unavailable — continuing without it (cache disabled)"
+              exit 0
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 32Mi
+      containers:
+        - name: server
+          image: ceooo-server:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5010
+              name: http
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: NODE_ENV
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: PORT
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: LOG_LEVEL
+            - name: TRUST_PROXY_HOPS
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: TRUST_PROXY_HOPS
+            - name: BACKEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: BACKEND_URL
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: DB_PASSWORD
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: DB_NAME
+            - name: UPLOADS_DIR
+              value: /app/uploads
+            - name: HOME
+              value: /tmp
+            - name: DATABASE_URL
+              value: "postgresql://$(DB_USER):$(DB_PASSWORD)@postgres-service.ceooo.svc.cluster.local:5432/$(DB_NAME)?schema=public&connection_limit=10&pool_timeout=20"
+            - name: REDIS_URL
+              value: "redis://redis-service.ceooo.svc.cluster.local:6379"
+            - name: FRONTEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: FRONTEND_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: JWT_SECRET
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: SESSION_SECRET
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: GOOGLE_CLIENT_ID
+                  optional: true
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: GOOGLE_CLIENT_SECRET
+                  optional: true
+            - name: GOOGLE_CALLBACK_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: GOOGLE_CALLBACK_URL
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: GOOGLE_API_KEY
+                  optional: true
+            - name: GITHUB_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: GITHUB_CLIENT_ID
+                  optional: true
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: GITHUB_CLIENT_SECRET
+                  optional: true
+            - name: GITHUB_CALLBACK_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: GITHUB_CALLBACK_URL
+            - name: GEMINI_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: GEMINI_MODEL
+            - name: AI_TIMEOUT
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: AI_TIMEOUT
+            - name: AI_MAX_RETRIES
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: AI_MAX_RETRIES
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: SMTP_HOST
+                  optional: true
+            - name: SMTP_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: SMTP_PORT
+            - name: SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: SMTP_USER
+                  optional: true
+            - name: SMTP_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: SMTP_PASS
+                  optional: true
+            - name: SMTP_FROM
+              valueFrom:
+                configMapKeyRef:
+                  name: ceooo-config
+                  key: SMTP_FROM
+            - name: ADMIN_PASSWORD_RESET
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: ADMIN_PASSWORD_RESET
+                  optional: true
+            - name: ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: ADMIN_EMAIL
+                  optional: true
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: ADMIN_PASSWORD
+                  optional: true
+            - name: ADMIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: ADMIN_NAME
+                  optional: true
+            - name: ADMIN_RESET_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ceooo-secrets
+                  key: ADMIN_RESET_PASSWORD
+                  optional: true
+          resources:
+            requests:
+              cpu: 250m
+              memory: 320Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 5010
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5010
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 5010
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                # Give the ingress a moment to remove this pod from endpoints
+                # before the process starts draining connections.
+                command: ["sh", "-c", "sleep 5"]
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: uploads-pvc
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: uploads-pvc
+  namespace: ceooo
+  labels:
+    app: ceooo
+    component: uploads
+spec:
+  # ReadWriteOnce keeps this portable. With more than one replica on different
+  # nodes use a ReadWriteMany class, or move uploads to object storage (S3/R2).
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+# server-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ceooo-server
+  namespace: ceooo
+  labels:
+    app: ceooo
+    component: server
+  annotations:
+    # If you use a cloud load balancer, add service.beta.kubernetes.io/ annotations
+    # here (e.g. AWS load balancer type, GCP backend config, Azure load balancer SKU).
+    # service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    # service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 5010
+      targetPort: 5010
+      protocol: TCP
+  selector:
+    app: ceooo
+    component: server
+
+---
+# client-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ceooo-client
+  namespace: ceooo
+  labels:
+    app: ceooo
+    component: client
+    tier: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ceooo
+      component: client
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ceooo
+        component: client
+        tier: frontend
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: client
+          image: ceooo-client:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            - name: HOSTNAME
+              value: "0.0.0.0"
+            - name: NEXT_TELEMETRY_DISABLED
+              value: "1"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          startupProbe:
+            httpGet:
+              path: /
+              port: 3000
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: next-cache
+              mountPath: /app/.next/cache
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: next-cache
+          emptyDir:
+            sizeLimit: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ceooo-client
+  namespace: ceooo
+  labels:
+    app: ceooo
+    component: client
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app: ceooo
+    component: client
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ceooo-client-pdb
+  namespace: ceooo
+  labels:
+    app: ceooo
+    component: client
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ceooo
+      component: client
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ceooo-client-hpa
+  namespace: ceooo
+  labels:
+    app: ceooo
+    component: autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ceooo-client
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 60
+
+---
+# network-policy.yaml
+# =============================================================================
+# CEOOO — NetworkPolicies
+#
+# Default-deny ingress for the namespace, then allow only:
+#   ingress-controller -> client:3000, server:5010
+#   server             -> postgres:5432, redis:6379
+#   client             -> server:5010 (SSR data fetching)
+#
+# Adjust the ingress-controller namespace label for your cluster (the common
+# values are `ingress-nginx` or `kube-system`).
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: ceooo
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-controller
+  namespace: ceooo
+spec:
+  podSelector:
+    matchExpressions:
+      - key: component
+        operator: In
+        values: [server, client]
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 5010
+        - protocol: TCP
+          port: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-client-to-server
+  namespace: ceooo
+spec:
+  podSelector:
+    matchLabels:
+      app: ceooo
+      component: server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ceooo
+              component: client
+      ports:
+        - protocol: TCP
+          port: 5010
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-server-to-datastores
+  namespace: ceooo
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [postgres, redis]
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ceooo
+              component: server
+        - podSelector:
+            matchLabels:
+              app: prisma-migrate
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: ceooo
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Egress to the public internet for AI + third-party integrations.
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    # Intra-namespace traffic (API <-> DB/Redis, client SSG/SSR fetches).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ceooo
+
+---
+# rollout-monitor.yaml
+# =============================================================================
+# CEOOO — Rollout safety configuration
+#
+# These annotations + a small readiness gate pattern make sure new pods are
+# healthy before traffic is shifted, and that a bad deploy can be rolled back.
+#
+# Usage:
+#   kubectl rollout status deployment/ceooo-server -n ceooo
+#   kubectl rollout undo deployment/ceooo-server -n ceooo
+# =============================================================================
+# The Deployment resources above already include:
+#   - maxUnavailable: 0   (no pod is taken down until the new one is ready)
+#   - readinessProbe on /health
+#   - livenessProbe on /health
+#
+# To enable progressive delivery (canary / blue-green), you would layer one
+# of these on top:
+#
+#   1. Argo Rollouts
+#        kind: Rollout  (instead of Deployment)
+#        strategy: canary / blueGreen
+#        trafficRouting: istio / nginx
+#
+#   2. Flagger + Istio/Linkerd/Nginx
+#        Automated canary analysis with Prometheus metrics.
+#
+#   3. Simple replica-based canary (no extra tooling):
+#        kubectl scale deployment ceooo-server --replicas=3 -n ceooo
+#        kubectl patch deployment ceooo-server -n ceooo -p '{"spec":{"template":{"metadata":{"annotations":{"special-canary":"true"}}}}}'
+#        Wait for canary pods to pass health checks, then progressively shift
+#        traffic via Ingress weighting or a service mesh.
+# =============================================================================
+
+# ---- Pod Disruption Budget ( protects availability during voluntary disruptions ) ----
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ceooo-server-pdb
+  namespace: ceooo
+  labels:
+    app: ceooo
+    component: server
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ceooo
+      component: server
+
+---
+# hpa.yaml
+# =============================================================================
+# CEOOO — HorizontalPodAutoscaler
+#
+# Scale the server deployment between 2 and 10 replicas based on:
+#   1. CPU utilisation (target 70% of request)
+#   2. Custom Prometheus metric: HTTP request latency (p95) — optional,
+#      requires a metrics-server + prometheus adapter or KEDA.
+#
+# Prerequisites:
+#   - metrics-server running in the cluster (for cpu/memory metrics)
+#   - (optional) prometheus-adapter or KEDA for custom metrics
+# =============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ceooo-server-hpa
+  namespace: ceooo
+  labels:
+    app: ceooo
+    component: autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ceooo-server
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    # ---- CPU-based scaling ----
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # ---- Memory-based scaling (guard rail; raise if the process is memory-bound) ----
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    # ---- Custom: HTTP request rate / queue depth (optional) ----
+    # - type: Pods
+    #   pods:
+    #     metric:
+    #       name: http_requests_per_second
+    #     target:
+    #       type: AverageValue
+    #       averageValue: "100"
+    #
+    # ---- Custom: queue depth (useful if you add a BullMQ/Redis job queue) ----
+    # - type: External
+    #   external:
+    #     metric:
+    #       name: redis_queue_depth
+    #     target:
+    #       type: AverageValue
+    #       averageValue: "50"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 20
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max
+
+---
+# ingress.yaml
+# =============================================================================
+# CEOOO — Ingress
+#
+#   /api/*      -> ceooo-server:5010   (REST API)
+#   /health*    -> ceooo-server:5010   (probes / uptime checks)
+#   /metrics    -> ceooo-server:5010   (Prometheus scrape, not public — see note)
+#   /uploads/*  -> ceooo-server:5010   (uploaded files)
+#   /*          -> ceooo-client:3000   (Next.js app)
+#
+# TLS: install cert-manager and uncomment the cluster-issuer annotation, or
+# create the secret manually:
+#   kubectl create secret tls ceooo-tls --cert=fullchain.pem --key=privkey.pem -n ceooo
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ceooo-ingress
+  namespace: ceooo
+  labels:
+    app: ceooo
+    component: ingress
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "Server: ceooo";
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - ceooo.example.com
+      secretName: ceooo-tls
+  rules:
+    - host: ceooo.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: ceooo-server
+                port:
+                  number: 5010
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: ceooo-server
+                port:
+                  number: 5010
+          - path: /uploads
+            pathType: Prefix
+            backend:
+              service:
+                name: ceooo-server
+                port:
+                  number: 5010
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ceooo-client
+                port:
+                  number: 3000
+---
+# Internal-only Service for /metrics so Prometheus can scrape without exposing
+# metrics through the public Ingress.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ceooo-server-metrics
+  namespace: ceooo
+  labels:
+    app: ceooo
+    component: metrics
+spec:
+  type: ClusterIP
+  ports:
+    - name: metrics
+      port: 5010
+      targetPort: 5010
+  selector:
+    app: ceooo
+    component: server
+
+---
+# metrics-serviceaccount.yaml
+# =============================================================================
+# CEOOO — metrics ServiceAccount (optional)
+#
+# If you plan to run a Prometheus scraper with a dedicated service account
+# instead of the default cluster role, bind a minimal Role here.
+# =============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ceooo-metrics
+  namespace: ceooo
+  labels:
+    app: ceooo
+    component: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ceooo-metrics-role
+  namespace: ceooo
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ceooo-metrics-binding
+  namespace: ceooo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ceooo-metrics-role
+subjects:
+  - kind: ServiceAccount
+    name: ceooo-metrics
+    namespace: ceooo
+
+---
+# resource-quota.yaml
+# =============================================================================
+# CEOOO — namespace guard rails
+#
+# A quota keeps a runaway rollout (or a bad HPA config) from consuming the
+# whole cluster; the LimitRange guarantees every pod gets sane defaults.
+# =============================================================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ceooo-quota
+  namespace: ceooo
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 12Gi
+    limits.cpu: "16"
+    limits.memory: 24Gi
+    persistentvolumeclaims: "6"
+    requests.storage: 60Gi
+    count/deployments.apps: "8"
+    count/statefulsets.apps: "4"
+    count/jobs.batch: "10"
+    count/services: "10"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: ceooo-defaults
+  namespace: ceooo
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 500m
+        memory: 512Mi
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      max:
+        cpu: "4"
+        memory: 4Gi

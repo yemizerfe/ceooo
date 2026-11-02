@@ -1,20 +1,48 @@
 {
-  "name": "server",
-  "module": "index.ts",
-  "type": "module",
+  "name": "ceooo-server",
+  "version": "1.0.0",
   "private": true,
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
+  "type": "module",
+  "module": "index.ts",
+  "scripts": {
+    "dev": "bun run --hot index.ts",
+    "build": "tsc --noEmit",
+    "start": "bun run dev",
+    "migrate": "bun run lib/migrate.ts",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "bun prisma/seed.ts",
+    "admin:create": "bun prisma/seed-admin.ts",
+    "test": "bun test"
   },
   "dependencies": {
+    "@google/genai": "^2.6.0",
+    "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.3",
-    "dotenv": "^17.3.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-validator": "^7.3.2",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
-    "nodemon": "^3.1.14",
-    "pg": "^8.20.0"
+    "multer": "^2.1.1",
+    "nodemailer": "^10.0.15",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "prisma": "^5.22.0",
+    "xlsx": "^0.18.5",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
+    "@types/bun": "latest",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.1.0",
+    "@types/nodemailer": "^8.0.2",
+    "@types/passport": "^1.0.17",
+    "@types/passport-google-oauth20": "^2.0.17",
+    "typescript": "^5"
   }
 }

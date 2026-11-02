@@ -1,0 +1,21 @@
+"use client";
+import { formatDistanceToNow, format } from "date-fns";
+import { Activity, RefreshCw } from "lucide-react";
+import { useAdminData } from "@/hooks/useAdminData";
+import { AdminPage, AdminLoading, AdminErrorState, AdminEmpty, adminCard } from "@/app/components/admin/AdminPage";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+type Health = { overall: string; service: { name: string; environment: string; uptimeSeconds: number; nodeVersion: string; platform: string; maintenanceMode: boolean }; checks: Array<{ key: string; name: string; state: string; detail: string; latencyMs: number | null; checkedAt: string }>; checkedAt: string };
+type Event = { id: string; type: string; message: string; source: string; timestamp: string };
+const stateClass = (state: string) => state === "operational" ? "bg-emerald-500" : state === "degraded" ? "bg-amber-500" : state === "down" ? "bg-red-500" : "bg-slate-500";
+export default function AdminSystemHealthPage() {
+  const { data, loading, error, refetch } = useAdminData<Health>("/system-health"); const { data: events, refetch: refetchEvents } = useAdminData<{ items: Event[]; total: number }>("/system-events");
+  const refresh = () => { void refetch(); void refetchEvents(); };
+  const checkedAtMs = data ? new Date(data.checkedAt).getTime() : 0;
+  const serviceStartedAt = data ? checkedAtMs - data.service.uptimeSeconds * 1000 : 0;
+  return <AdminPage title="System Health" description="Live service checks and recent operator-safe system events." actions={<Button variant="outline" onClick={refresh}><RefreshCw />Refresh</Button>}>
+    {error ? <AdminErrorState message={error} retry={refresh} /> : loading ? <AdminLoading rows={6} /> : data && <><Card className={adminCard}><CardHeader><div className="flex items-center justify-between"><CardTitle>Platform Status</CardTitle><Badge variant="outline" className="capitalize">{data.overall}</Badge></div></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{data.checks.map((check) => <div key={check.key} className="rounded-lg border border-gray-200 dark:border-white/10 p-4"><div className="flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${stateClass(check.state)}`} /><p className="font-medium">{check.name}</p></div><p className="mt-3 text-sm capitalize">{check.state}</p><p className="mt-1 text-xs text-gray-500">{check.detail}</p><p className="mt-3 text-[11px] text-gray-400">Checked {formatDistanceToNow(new Date(check.checkedAt), { addSuffix: true })}</p></div>)}</CardContent></Card><Card className={adminCard}><CardHeader><CardTitle>Service Information</CardTitle></CardHeader><CardContent className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4"><Info label="Application" value={data.service.name} /><Info label="Environment" value={data.service.environment} /><Info label="Uptime" value={formatDistanceToNow(new Date(serviceStartedAt), { addSuffix: true })} /><Info label="Runtime" value={`${data.service.nodeVersion} · ${data.service.platform}`} /></CardContent></Card><Card className={adminCard}><CardHeader><CardTitle>Recent System Events</CardTitle></CardHeader><CardContent>{events?.items.length ? <div className="divide-y divide-gray-100 dark:divide-white/5">{events.items.map((event) => <div key={event.id} className="py-3 flex items-start gap-3"><Activity className="mt-0.5 h-4 w-4 text-blue-500" /><div className="flex-1"><p className="text-sm">{event.message}</p><p className="text-xs text-gray-500">{event.source} · {format(new Date(event.timestamp), "PPp")}</p></div><Badge variant="outline">{event.type}</Badge></div>)}</div> : <AdminEmpty message="No recent system errors or warnings." />}</CardContent></Card></>}
+  </AdminPage>;
+}
+function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-lg bg-gray-50 dark:bg-white/5 p-3"><p className="text-xs text-gray-500">{label}</p><p className="mt-1 font-medium">{value}</p></div>; }

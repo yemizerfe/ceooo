@@ -1,0 +1,1218 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ USER & AUTH ============
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  // Null for accounts created through an OAuth provider (Google/GitHub): those
+  // users sign in with the provider until they set a password via password reset.
+  passwordHash    String?
+  
+  // Basic Info
+  name            String?
+  avatarUrl       String?
+  bio             String?
+  
+  // Company Info
+  companyName     String?
+  companySize     String?
+  industry        String?
+  // Free-text job title chosen during onboarding ("CEO / Founder", "COO", ...).
+  // DISPLAY ONLY - never read for authorization.
+  role            String?
+  // RBAC catalog key (Role.name) used to resolve permissions server-side.
+  // This is the ONLY field authorization reads. `role` above is a job title and
+  // must never gate access, otherwise free text silently grants/denies it.
+  accessRole      String?   @default("CEO")
+  teamMembers     TeamMember[] 
+  
+  // Preferences (JSON for flexible storage)
+  preferences     Json?
+  integrations    Json?
+  
+  // Settings
+  timezone        String    @default("UTC")
+  dateFormat      String    @default("MM/DD/YYYY")
+  language        String    @default("en")
+  
+  emailNotifications  Boolean @default(true)
+  pushNotifications   Boolean @default(true)
+  
+  // Security
+  twoFactorEnabled  Boolean @default(false)
+  // Set when an administrator resets a user's access. Any token issued before
+  // this timestamp is rejected, forcing the user to sign in again.
+  accessResetAt     DateTime?
+  
+  // Status
+  hasCompletedOnboarding Boolean @default(false)
+  isActive        Boolean   @default(true)
+  isVerified      Boolean   @default(false)
+  
+  // Usage
+  aiUsageCount    Int       @default(0)
+  subscriptionPlan String   @default("free")
+  
+  // Multi-tenant organization
+  organizationId  String?
+  organization    Organization? @relation("OrgMembers", fields: [organizationId], references: [id], onDelete: SetNull)
+  ownedOrganizations Organization[] @relation("OrgOwners")
+  
+  // OAuth
+  linkedAccounts  Json      @default("[]")
+  
+  // Timestamps
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // ============ EXISTING RELATIONS ============
+  decisions       Decision[]
+  stakeholders    Stakeholder[]
+  projects        Project[]
+  notes           Note[]
+  notifications   Notification[]
+  calendarEvents  CalendarEvent[]
+  aiInsights      AIInsight[]
+  sessions        Session[]
+  financialRecords FinancialRecord[]
+  budgets         Budget[]
+  okrs            OKR[]
+  kpis            KPI[]
+
+  // ============ FOCUS RELATIONS ============
+  focusSessions   FocusSession[]
+  focusTasks      FocusTask[]
+  focusBlocks     FocusBlock[]
+  
+  // ============ N8N INTEGRATION RELATIONS ============
+  integrationData     IntegrationData[]
+  integrationConnections IntegrationConnection[]
+  webhookLogs         WebhookLog[]
+  executiveMetrics    ExecutiveMetric[]
+  workflowExecutions  WorkflowExecution[]
+  integrationLogs     IntegrationLog[]
+  syncJobs            SyncJob[]
+
+  // ============ ADMIN RELATIONS ============
+  auditLogs           AuditLog[]  @relation("AuditAdminLogs")
+  aiUsageLogs         AIUsage[]
+}
+
+// ============ SESSIONS ============
+model Session {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token         String    @unique
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+}
+
+// ============ DECISION MAKING ============
+model Decision {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title         String
+  description   String?
+  status        DecisionStatus @default(PENDING)
+  priority      Priority  @default(MEDIUM)
+  impact        Impact    @default(MEDIUM)
+  deadline      DateTime?
+  
+  // Content
+  notes         String?
+  aiConfidence  Int?
+  
+  // Options (stored as JSON for flexibility)
+  options       Json      @default("[]")
+  selectedOption String?
+  
+  // Timeline
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  decidedAt     DateTime?
+}
+
+enum DecisionStatus {
+  PENDING
+  IN_PROGRESS
+  DECIDED
+  EXECUTING
+  CANCELLED
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum Impact {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+// ============ STAKEHOLDER MANAGEMENT ============
+model Stakeholder {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name          String
+  email         String?
+  phone         String?
+  company       String?
+  role          String?
+  type          StakeholderType
+  
+  // Relationship tracking
+  engagementScore Int     @default(0)
+  priority      Priority  @default(MEDIUM)
+  notes         String?
+  
+  // Interactions
+  lastContactAt DateTime?
+  nextFollowUp  DateTime?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  interactions  Interaction[]
+  deals         Deal[]
+}
+
+enum StakeholderType {
+  INVESTOR
+  BOARD_MEMBER
+  PARTNER
+  CLIENT
+  ADVISOR
+  VENDOR
+  OTHER
+}
+
+model Interaction {
+  id            String    @id @default(cuid())
+  stakeholderId String
+  stakeholder   Stakeholder @relation(fields: [stakeholderId], references: [id], onDelete: Cascade)
+  
+  type          InteractionType
+  date          DateTime  @default(now())
+  summary       String?
+  notes         String?
+  actionItems   Json      @default("[]")
+  outcome       String?
+  
+  createdAt     DateTime  @default(now())
+}
+
+enum InteractionType {
+  MEETING
+  EMAIL
+  CALL
+  VIDEO_CALL
+  MESSAGE
+  OTHER
+}
+
+model Deal {
+  id            String    @id @default(cuid())
+  stakeholderId String
+  stakeholder   Stakeholder @relation(fields: [stakeholderId], references: [id], onDelete: Cascade)
+  
+  name          String
+  stage         DealStage @default(NEGOTIATION)
+  value         Float?
+  probability   Int?
+  expectedClose DateTime?
+  notes         String?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+enum DealStage {
+  NEGOTIATION
+  PENDING
+  CLOSED_WON
+  CLOSED_LOST
+}
+
+// ============ PROJECT MANAGEMENT ============
+model Project {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name          String
+  description   String?
+  status        ProjectStatus @default(ACTIVE)
+  priority      Priority  @default(MEDIUM)
+  
+  startDate     DateTime?
+  endDate       DateTime?
+  deadline      DateTime?
+  
+  progress      Int       @default(0)
+  
+  
+  budget        Float?
+  teamSize      Int?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  milestones    Milestone[]
+  tasks         Task[]
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+model Milestone {
+  id            String    @id @default(cuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  name          String
+  description   String?
+  dueDate       DateTime?
+  completed     Boolean   @default(false)
+  completedAt   DateTime?
+  
+  createdAt     DateTime  @default(now())
+}
+
+model Task {
+  id            String    @id @default(cuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  title         String
+  description   String?
+  status        TaskStatus @default(TODO)
+  priority      Priority  @default(MEDIUM)
+  
+  assignedTo    String?
+  dueDate       DateTime?
+  completedAt   DateTime?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+// ============ NOTES BOARD ============
+model Note {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title         String
+  content       String?
+  category      NoteCategory @default(GENERAL)
+  tags          Json      @default("[]")
+  
+  isPinned      Boolean   @default(false)
+  isArchived    Boolean   @default(false)
+  
+  aiSummary     String?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+enum NoteCategory {
+  MEETING
+  IDEA
+  DECISION
+  TASK
+  GENERAL
+}
+
+// ============ AI INSIGHTS ============
+model AIInsight {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title         String
+  description   String
+  type          InsightType
+  impact        Impact
+  confidence    Int
+  
+  isRead        Boolean   @default(false)
+  isActioned    Boolean   @default(false)
+  
+  metadata      Json      @default("{}")
+  
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime?
+}
+
+enum InsightType {
+  OPPORTUNITY
+  RISK
+  ALERT
+  FORECAST
+  RECOMMENDATION
+}
+
+// ============ CALENDAR ============
+model CalendarEvent {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title         String
+  description   String?
+  type          CalendarEventType @default(MEETING)
+  startTime     DateTime
+  endTime       DateTime
+  allDay        Boolean   @default(false)
+  location      String?
+  meetingLink   String?
+  attendees     Json      @default("[]")
+  reminderMinutes Int?
+  status        EventStatus @default(SCHEDULED)
+  priority      EventPriority @default(MEDIUM)
+  recurring     RecurringType @default(NONE)
+  tags          Json      @default("[]")
+  notes         String?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+enum CalendarEventType {
+  MEETING
+  BOARD_MEETING
+  CALL
+  STRATEGY_SESSION
+  FOCUS_BLOCK
+  DEADLINE
+  TASK
+  OTHER
+}
+
+enum EventStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+}
+
+enum EventPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RecurringType {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+// ============ FINANCIAL TRACKING ============
+model FinancialRecord {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type          FinancialType
+  amount        Float
+  category      String
+  description   String?
+  date          DateTime  @default(now())
+  
+  budgetId      String?
+  budget        Budget?   @relation(fields: [budgetId], references: [id])
+  
+  // Provenance for imported / integrated records (source provider, import
+  // batch, department, …).
+  metadata      Json?
+  
+  createdAt     DateTime  @default(now())
+}
+
+enum FinancialType {
+  INCOME
+  EXPENSE
+  BUDGET
+  FORECAST
+}
+
+model Budget {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name          String
+  category      String
+  allocated     Float
+  spent         Float     @default(0)
+  period        BudgetPeriod
+  
+  startDate     DateTime
+  endDate       DateTime
+  
+  // Department / owner / integration provenance.
+  metadata      Json?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  transactions  FinancialRecord[]
+}
+
+enum BudgetPeriod {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+// ============ NOTIFICATIONS ============
+model Notification {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title         String
+  message       String
+  type          NotificationType
+  priority      Priority  @default(MEDIUM)
+  
+  isRead        Boolean   @default(false)
+  
+  metadata      Json      @default("{}")
+  
+  createdAt     DateTime  @default(now())
+}
+
+enum NotificationType {
+  DECISION
+  CALENDAR
+  FINANCIAL
+  STAKEHOLDER
+  AI_INSIGHT
+  SYSTEM
+  REMINDER
+}
+
+// ============ COMPANY PERFORMANCE (OKRs/KPIs) ============
+model OKR {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  objective     String
+  description   String?
+  owner         String?
+  quarter       String
+  year          Int
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  keyResults    KeyResult[]
+}
+
+model KeyResult {
+  id            String    @id @default(cuid())
+  okrId         String
+  okr           OKR       @relation(fields: [okrId], references: [id], onDelete: Cascade)
+  
+  title         String
+  target        Float
+  current       Float     @default(0)
+  unit          String
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+enum KpiFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+model KPI {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  name           String
+  description    String?
+  category       String?
+  frequency      KpiFrequency @default(MONTHLY)
+  unit           String
+  currentValue   Float        @default(0)
+  targetValue    Float        @default(0)
+
+  ownerId        String?
+  dataSource     String?
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  values         KPIValue[]
+}
+
+model KPIValue {
+  id         String   @id @default(cuid())
+  kpiId      String
+  kpi        KPI      @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+
+  value      Float
+  recordedAt DateTime @default(now())
+  note       String?
+
+  createdAt  DateTime @default(now())
+
+  @@index([kpiId])
+  @@index([recordedAt])
+}
+
+// ============ TEAM MEMBERS ============
+model TeamMember {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name          String
+  email         String?
+  phone         String?
+  role          String?
+  department    String?
+  location      String?
+  avatarUrl     String?
+  
+  employmentType EmploymentType @default(FULL_TIME)
+  status        MemberStatus @default(AVAILABLE)
+  priority      MemberPriority @default(MEDIUM)
+  
+  performanceScore Int @default(70)
+  workloadScore    Int @default(50)
+  engagementScore  Int @default(70)
+  burnoutRisk      Int @default(30)
+  activeTasks      Int @default(0)
+  meetingsThisWeek Int @default(0)
+  completedTasks   Int @default(0)
+  pendingTasks     Int @default(0)
+  
+  skills        Json @default("[]")
+  projects      Json @default("[]")
+  
+  notes         String?
+  managerName   String?
+  managerId     String?
+  
+  joinedAt      DateTime @default(now())
+  lastActiveAt  DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+}
+
+enum MemberStatus {
+  ACTIVE
+  AVAILABLE
+  FOCUSED
+  IN_MEETING
+  PTO
+  OFFLINE
+  ON_LEAVE
+}
+
+enum MemberPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// ============ FOCUS MODELS ============
+model FocusSession {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title         String
+  duration      Int
+  completedAt   DateTime
+  notes         String?
+  score         Int?
+  
+  createdAt     DateTime  @default(now())
+}
+
+model FocusTask {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title         String
+  priority      FocusPriority @default(MEDIUM)
+  progress      Int       @default(0)
+  completed     Boolean   @default(false)
+  order         Int       @default(0)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model FocusBlock {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title         String
+  scheduledTime DateTime
+  duration      Int       @default(90)
+  
+  createdAt     DateTime  @default(now())
+}
+
+enum FocusPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// ============================================================
+// ============ N8N INTEGRATION ============
+// ============================================================
+
+model IntegrationData {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  source      String   @default("n8n")
+  data        Json
+  metadata    Json?
+  
+  receivedAt  DateTime @default(now())
+  processedAt DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([receivedAt])
+  @@index([source])
+}
+
+model IntegrationConnection {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name        String
+  type        IntegrationType
+  status      IntegrationStatus @default(DISCONNECTED)
+
+  // How the connection was established: "oauth2" | "apiKey" | "csv".
+  authMethod    String?
+
+  connectionId  String?
+  authUrl       String?
+  
+  accessToken   String?
+  refreshToken  String?
+  tokenExpiry   DateTime?
+
+  // AES-GCM encrypted JSON of user-supplied API key / token credentials
+  // (never plaintext, never returned to the client).
+  encryptedCredentials String?
+
+  // Non-secret connection details (account label, scopes, imported record
+  // counts, credential field names, ...). Secret values are NEVER stored here.
+  metadata      Json?
+  
+  syncEnabled   Boolean  @default(true)
+  syncFrequency String   @default("30m")
+  lastSyncAt    DateTime?
+  lastSyncStatus String?
+  
+  appId         String?
+  workspaceId   String?
+  
+  connectedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  integrationLogs IntegrationLog[]
+  syncJobs        SyncJob[]
+
+  @@index([userId])
+  @@index([status])
+  @@unique([userId, name])
+}
+
+enum IntegrationType {
+  CRM
+  ERP
+  FINANCE
+  PROJECT_MANAGEMENT
+  COMMUNICATION
+  PRODUCTIVITY
+  HR
+  MARKETING
+  SUPPORT
+  ANALYTICS
+  OTHER
+}
+
+enum IntegrationStatus {
+  DISCONNECTED
+  CONNECTING
+  CONNECTED
+  ERROR
+  EXPIRED
+}
+
+// ============================================================
+// ============ WEBHOOK LOGS ============
+// ============================================================
+
+model WebhookLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  source      String
+  event       String
+  
+  method      String   @default("POST")
+  url         String?
+  headers     Json?
+  body        Json?
+  
+  statusCode  Int?
+  response    Json?
+  error       String?
+  
+  processedAt DateTime?
+  durationMs  Int?
+  
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([source])
+  @@index([createdAt])
+}
+
+// ============================================================
+// ============ EXECUTIVE METRICS (Dashboard) ============
+// ============================================================
+
+model ExecutiveMetric {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  companyName    String?
+  revenue        Float   @default(0)
+  revenueGrowth  Float   @default(0)
+  profit         Float   @default(0)
+  profitMargin   Float   @default(0)
+  cashFlow       Float   @default(0)
+  
+  salesPipeline  Float   @default(0)
+  totalDeals     Int     @default(0)
+  winRate        Float   @default(0)
+  avgDealSize    Float   @default(0)
+  
+  activeProjects Int     @default(0)
+  totalProjects  Int     @default(0)
+  projectCompletionRate Float @default(0)
+  teamVelocity   Int     @default(0)
+  
+  employeeCount  Int     @default(0)
+  headcountGrowth Float  @default(0)
+  
+  overallHealth  Int     @default(70)
+  
+  insights       Json?
+  
+  period         String  @default("daily")
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  
+  recordedAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+  @@index([recordedAt])
+  @@index([period])
+}
+
+// ============================================================
+// ============ WORKFLOW EXECUTIONS (n8n) ============
+// ============================================================
+
+model WorkflowExecution {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  workflowId  String
+  workflowName String?
+  
+  status      WorkflowStatus @default(PENDING)
+  triggerType String
+  
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  durationMs  Int?
+  
+  input       Json?
+  output      Json?
+  error       String?
+  
+  executionId String?
+  nodeResults Json?
+  
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([workflowId])
+  @@index([status])
+}
+
+enum WorkflowStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+// ============================================================
+// ============ INTEGRATION LOGS ============
+// ============================================================
+
+model IntegrationLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  integrationId String
+  integration   IntegrationConnection @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  
+  action      String
+  status      String
+  message     String?
+  
+  request     Json?
+  response    Json?
+  error       String?
+  
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  durationMs  Int?
+  
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([integrationId])
+  @@index([status])
+}
+
+// ============================================================
+// ============ DATA SYNC JOBS ============
+// ============================================================
+
+model SyncJob {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  integrationId String
+  integration   IntegrationConnection @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  
+  type        SyncType @default(FULL)
+  status      SyncStatus @default(PENDING)
+  
+  recordsSynced Int    @default(0)
+  recordsFailed Int   @default(0)
+  errorCount   Int    @default(0)
+  
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  
+  metadata    Json?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([integrationId])
+  @@index([status])
+}
+
+enum SyncType {
+  FULL
+  INCREMENTAL
+  BATCH
+}
+
+enum SyncStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// ============================================================
+// ============ ADMIN PANEL (multi-tenant) ============
+// ============================================================
+
+// An organization represents a company using the platform (multi-tenant).
+model Organization {
+  id          String   @id @default(cuid())
+  name        String   @unique
+
+  industry    String?
+  companySize String?
+
+  // Subscription (denormalized for simplicity — one active plan per org)
+  plan                 String    @default("free") // free | pro | business
+  subscriptionStatus   String    @default("trial") // trial | active | past_due | cancelled
+  subscriptionStartDate DateTime?
+  subscriptionRenewalDate DateTime?
+
+  isActive    Boolean  @default(true)
+
+  ownerId     String?
+  owner       User?    @relation("OrgOwners", fields: [ownerId], references: [id], onDelete: SetNull)
+  members     User[]   @relation("OrgMembers")
+  kpis        KPI[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([subscriptionStatus])
+  @@index([plan])
+}
+
+// Singleton row holding platform-level settings + feature flags.
+// Everything the Admin can configure for the platform itself lives here.
+model AdminSetting {
+  id              String   @id @default("global-settings")
+  applicationName String   @default("CEOOO")
+
+  // Organization (platform) identity
+  organizationName    String  @default("CEOOO")
+  organizationLogoUrl String?
+
+  // Regional defaults
+  defaultTimezone String   @default("UTC")
+  defaultCurrency String   @default("USD")
+  defaultDateFormat String @default("MM/DD/YYYY")
+  defaultLanguage String   @default("en")
+
+  maintenanceMode Boolean  @default(false)
+  featureFlags    Json     @default("{\"aiAssistant\":true,\"advancedAnalytics\":true,\"budgetForecasting\":true,\"okrInsights\":true}")
+
+  // ===== Security (all values are enforced by the backend) =====
+  // Strong password policy (complexity + min length) on registration.
+  requireStrongPassword Boolean @default(true)
+  // JWT / session lifetime in minutes. Default preserves the historical 7d tokens.
+  sessionTimeoutMinutes Int     @default(10080)
+  // Allow public self-service registration.
+  allowRegistration     Boolean @default(true)
+  // Failed login attempts allowed per window before the account/ip is throttled.
+  maxLoginAttempts      Int     @default(10)
+
+  // ===== AI =====
+  aiEnabled  Boolean @default(true)
+  aiProvider String  @default("google-gemini")
+  aiModel    String  @default("gemini-2.0-flash-exp")
+
+  // ===== Notification defaults (per category) =====
+  notificationDefaults Json @default("{\"Security\":true,\"System\":true,\"User\":true,\"Integration\":true,\"AI\":true}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============ RBAC ============
+// Platform role. `name` is the exact value stored in User.role so existing
+// string based role assignments keep working while gaining permissions.
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  label       String
+  description String?
+  // System roles (ADMIN, CEO, ...) cannot be deleted.
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions RolePermission[]
+
+  @@index([isSystem])
+}
+
+// A single grantable capability, e.g. "users.view" or "admin.audit_logs".
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  group       String
+  label       String
+  description String?
+  isSystem    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  roles RolePermission[]
+
+  @@index([group])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+// Admin-configurable platform notification switches.
+model NotificationSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  label       String
+  description String?
+  category    String   @default("System") // Security | System | User | Integration | AI
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+}
+
+// Audit trail for important administrative actions
+model AuditLog {
+  id          String   @id @default(cuid())
+  adminUserId String?
+  admin       User?    @relation("AuditAdminLogs", fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  action      String
+  targetType  String
+  targetId    String?
+
+  // SUCCESS | FAILURE — never store secrets or request bodies here.
+  result      String   @default("SUCCESS")
+  ipAddress   String?
+  userAgent   String?
+
+  timestamp   DateTime @default(now())
+  metadata    Json     @default("{}")
+
+  @@index([timestamp])
+  @@index([adminUserId])
+  @@index([targetType])
+  @@index([result])
+}
+
+// Per-request AI usage log (written by ai.service.ts logUsage)
+model AIUsage {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  feature       String
+  promptTokens  Int      @default(0)
+  responseTokens Int     @default(0)
+  totalTokens   Int      @default(0)
+  durationMs    Int      @default(0)
+  success       Boolean  @default(true)
+  cacheHit      Boolean  @default(false)
+  error         String?
+
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([feature])
+}
+
+// Inbound requests from the public support and sales surfaces: request a demo,
+// schedule a call, email support, and live-chat transcripts handed to a human.
+// Public (unauthenticated) writes land here, so nothing sensitive is accepted.
+model SupportRequest {
+  id            String   @id @default(cuid())
+  reference     String   @unique
+  type          String // DEMO | CALL | EMAIL | CHAT
+  status        String   @default("OPEN") // OPEN | CONTACTED | CLOSED
+  name          String
+  email         String
+  company       String?
+  phone         String?
+  jobTitle      String?
+  companySize   String?
+  subject       String?
+  category      String?
+  priority      String?
+  message       String?
+  meetingType   String?
+  timezone      String?
+  preferredDate DateTime?
+  preferredTime String?
+  source        String?
+  metadata      Json     @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@index([email])
+}

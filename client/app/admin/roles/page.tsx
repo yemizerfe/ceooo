@@ -1,0 +1,28 @@
+"use client";
+import { useState } from "react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
+import { adminRequest, AdminError } from "@/lib/adminApi";
+import { useAdminData } from "@/hooks/useAdminData";
+import { useToast } from "@/app/components/ui/use-toast";
+import { AdminPage, AdminLoading, AdminErrorState, AdminEmpty, adminCard, adminTableWrap } from "@/app/components/admin/AdminPage";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+type Role = { id: string; name: string; label: string; description: string | null; isSystem: boolean; isProtected: boolean; userCount: number; permissionCount: number; permissions: string[] };
+export default function AdminRolesPage() {
+  const { data, loading, error, refetch } = useAdminData<Role[]>("/roles");
+  const { toast } = useToast();
+  const [editing, setEditing] = useState<Role | null>(null); const [open, setOpen] = useState(false); const [deleting, setDeleting] = useState<Role | null>(null); const [busy, setBusy] = useState(false); const [form, setForm] = useState({ name: "", label: "", description: "" });
+  const edit = (role?: Role) => { setEditing(role ?? null); setForm(role ? { name: role.name, label: role.label, description: role.description ?? "" } : { name: "", label: "", description: "" }); setOpen(true); };
+  const save = async () => { setBusy(true); try { await adminRequest(editing ? `/roles/${editing.id}` : "/roles", { method: editing ? "PATCH" : "POST", body: JSON.stringify(form) }); toast({ title: editing ? "Role updated successfully" : "Role created successfully", variant: "success" }); setOpen(false); await refetch(); } catch (e) { toast({ title: (e as AdminError).message, variant: "destructive" }); } finally { setBusy(false); } };
+  const remove = async () => { if (!deleting) return; setBusy(true); try { await adminRequest(`/roles/${deleting.id}`, { method: "DELETE" }); toast({ title: "Role deleted", variant: "success" }); setDeleting(null); await refetch(); } catch (e) { toast({ title: (e as AdminError).message, variant: "destructive" }); } finally { setBusy(false); } };
+  return <AdminPage title="Roles" description="Define platform access levels and protect system-critical roles." actions={<Button onClick={() => edit()}><Plus />Create Role</Button>}>
+    {error ? <AdminErrorState message={error} retry={() => void refetch()} /> : loading ? <AdminLoading /> : data?.length ? <Card className={adminCard}><CardContent className={adminTableWrap}><Table><TableHeader><TableRow><TableHead>Role</TableHead><TableHead>Description</TableHead><TableHead>Users</TableHead><TableHead>Permissions</TableHead><TableHead>Type</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{data.map((role) => <TableRow key={role.id}><TableCell className="font-medium">{role.label}<p className="text-xs text-gray-500">{role.name}</p></TableCell><TableCell className="max-w-sm text-gray-600 dark:text-slate-300">{role.description || "—"}</TableCell><TableCell>{role.userCount}</TableCell><TableCell>{role.permissionCount}</TableCell><TableCell><Badge variant="outline">{role.isSystem ? "System" : "Custom"}</Badge></TableCell><TableCell><div className="flex justify-end gap-1"><Button size="sm" variant="ghost" onClick={() => edit(role)} disabled={role.isProtected}><Pencil />Manage</Button><Button size="sm" variant="ghost" onClick={() => setDeleting(role)} disabled={role.isSystem}><Trash2 /></Button></div></TableCell></TableRow>)}</TableBody></Table></CardContent></Card> : <Card className={adminCard}><AdminEmpty message="No roles are available." /></Card>}
+    <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>{editing ? `Manage ${editing.label}` : "Create Role"}</DialogTitle><DialogDescription>Protected system roles cannot be modified or deleted.</DialogDescription></DialogHeader><div className="space-y-3"><label className="block text-sm">Name<Input disabled={!!editing} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value.toUpperCase().replace(/\s/g, "_") })} placeholder="PROJECT_LEAD" /></label><label className="block text-sm">Label<Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} /></label><label className="block text-sm">Description<Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label></div><DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={() => void save()} disabled={busy}>{busy ? "Saving…" : "Save Role"}</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={!!deleting} onOpenChange={(value) => !value && setDeleting(null)}><DialogContent><DialogHeader><DialogTitle>Remove Role?</DialogTitle><DialogDescription>This permanently removes the unassigned custom role “{deleting?.label}”.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDeleting(null)}>Cancel</Button><Button variant="destructive" onClick={() => void remove()} disabled={busy}>Remove Role</Button></DialogFooter></DialogContent></Dialog>
+  </AdminPage>;
+}

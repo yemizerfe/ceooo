@@ -1,0 +1,124 @@
+# =============================================================================
+# CEOOO — NetworkPolicies
+#
+# Default-deny ingress for the namespace, then allow only:
+#   ingress-controller -> client:3000, server:5010
+#   server             -> postgres:5432, redis:6379
+#   client             -> server:5010 (SSR data fetching)
+#
+# Adjust the ingress-controller namespace label for your cluster (the common
+# values are `ingress-nginx` or `kube-system`).
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: ceooo
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-controller
+  namespace: ceooo
+spec:
+  podSelector:
+    matchExpressions:
+      - key: component
+        operator: In
+        values: [server, client]
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 5010
+        - protocol: TCP
+          port: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-client-to-server
+  namespace: ceooo
+spec:
+  podSelector:
+    matchLabels:
+      app: ceooo
+      component: server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ceooo
+              component: client
+      ports:
+        - protocol: TCP
+          port: 5010
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-server-to-datastores
+  namespace: ceooo
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [postgres, redis]
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ceooo
+              component: server
+        - podSelector:
+            matchLabels:
+              app: prisma-migrate
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: ceooo
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Egress to the public internet for AI + third-party integrations.
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    # Intra-namespace traffic (API <-> DB/Redis, client SSG/SSR fetches).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ceooo
