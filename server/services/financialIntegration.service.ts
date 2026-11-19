@@ -150,11 +150,11 @@ export class FinancialIntegrationService {
       const columns = lines[i].split(',');
       if (columns.length >= 4) {
         transactions.push({
-          date: new Date(columns[0]),
-          description: columns[1],
-          category: columns[2],
-          amount: parseFloat(columns[3]),
-          type: parseFloat(columns[3]) > 0 ? 'INCOME' : 'EXPENSE'
+          date: new Date(columns[0] || new Date()),
+          description: columns[1] || '',
+          category: columns[2] || '',
+          amount: parseFloat(columns[3] || '0'),
+          type: parseFloat(columns[3] || '0') > 0 ? 'INCOME' : 'EXPENSE'
         });
       }
     }
@@ -221,7 +221,7 @@ export class FinancialIntegrationService {
       
       return { imported: transactions.length, errors };
     } catch (error) {
-      errors.push(error.message);
+      errors.push(error instanceof Error ? error.message : 'Unknown error');
       return { imported: 0, errors };
     }
   }

@@ -24,11 +24,10 @@ interface AuthState {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5010";
 
-// Email + password auth goes through this app's own /api/auth/* routes, which
-// forward to the API server-side. Sending credentials straight to the API from
-// the browser made sign-in depend on its CORS allow-list, so opening the app on
-// 127.0.0.1, a LAN IP or a preview host failed with an opaque network error.
-const AUTH_ENDPOINT = "/api/auth";
+// The frontend and the API are deployed as two separate sites, so auth talks
+// straight to the API origin like every other service call. The API's CORS
+// allow-list must include this site's origin (FRONTEND_URL / CORS_ORIGINS).
+const AUTH_ENDPOINT = `${API_URL}/api/auth`;
 
 function describeAuthError(error: unknown, fallback: string): string {
   if (error instanceof Error) {

@@ -101,6 +101,23 @@ docker compose down
 
 Refer to the Docker Compose configuration and application requirements for the environment variables and services required by your deployment.
 
+## Deploying the client and the server separately
+
+`client/` and `server/` are two independent deployments. Each folder is built and run from its own root and does not reference files in the other:
+
+| Folder | What it contains | Build | Start |
+| --- | --- | --- | --- |
+| `server/` | Express API, Prisma schema and migrations, AI services, third-party integrations | `bun install` | `bun run start` |
+| `client/` | Next.js frontend (pages, components, stores, browser-side helpers) | `npm ci && npm run build` | `npm start` |
+
+Every HTTP endpoint lives in `server/`. The client has no API routes of its own; it calls the API over HTTP at `NEXT_PUBLIC_API_URL`.
+
+**Server site** — set `DATABASE_URL`, `JWT_SECRET`, `SESSION_SECRET` and `FRONTEND_URL` (the public URL of the client site). If the client is reachable from more than one origin (preview deployments, custom domains), list them in `CORS_ORIGINS`. Apply migrations on release with `bunx prisma migrate deploy`.
+
+**Client site** — set `NEXT_PUBLIC_API_URL` to the public URL of the API site. It is compiled in at build time, so rebuild after changing it.
+
+For OAuth sign-in, the provider callbacks point at the API site and the API redirects back to `FRONTEND_URL/auth/callback`, so both values must be the public URLs of the two deployments.
+
 
 
 ## License

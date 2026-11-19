@@ -293,7 +293,7 @@ export async function deleteUser(targetUserId: string, actorUserId: string, conf
     throw new AdminActionError('You cannot delete your own account', 409);
   }
 
-  if (confirmation.trim().toLowerCase() !== target.email.toLowerCase()) {
+  if (confirmation.trim().toLowerCase() !== (target?.email ?? '').toLowerCase()) {
     throw new AdminActionError('The confirmation text does not match the user email', 400);
   }
 
@@ -304,7 +304,7 @@ export async function deleteUser(targetUserId: string, actorUserId: string, conf
   await revokeUserTokens(target.id);
   await prisma.user.delete({ where: { id: target.id } });
 
-  return { id: target.id, email: target.email };
+  return { id: target.id, email: target.email ?? '' };
 }
 
 /** Cryptographically random temporary password that satisfies the policy. */

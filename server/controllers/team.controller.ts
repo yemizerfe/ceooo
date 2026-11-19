@@ -1,11 +1,12 @@
-import { Response } from 'express';
+import type { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware.js';
 import { prisma } from '../lib/prisma.js';
 
 // Get all team members
-export const getTeamMembers = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getTeamMembers = async (req: any, res: any): Promise<void> => {
   try {
-    const userId = req.user?.id;
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
     if (!userId) {
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
@@ -63,9 +64,10 @@ export const getTeamMembers = async (req: AuthRequest, res: Response): Promise<v
 };
 
 // Get single team member
-export const getTeamMemberById = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getTeamMemberById = async (req, res): Promise<void> => {
   try {
-    const userId = req.user?.id;
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
     const { id } = req.params;
     
     if (!userId) {
@@ -121,9 +123,10 @@ export const getTeamMemberById = async (req: AuthRequest, res: Response): Promis
 };
 
 // Create team member
-export const createTeamMember = async (req: AuthRequest, res: Response): Promise<void> => {
+export const createTeamMember = async (req, res): Promise<void> => {
   try {
-    const userId = req.user?.id;
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
     if (!userId) {
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
@@ -211,9 +214,10 @@ export const createTeamMember = async (req: AuthRequest, res: Response): Promise
 };
 
 // Update team member
-export const updateTeamMember = async (req: AuthRequest, res: Response): Promise<void> => {
+export const updateTeamMember = async (req, res): Promise<void> => {
   try {
-    const userId = req.user?.id;
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
     const { id } = req.params;
     
     if (!userId) {
@@ -308,9 +312,10 @@ export const updateTeamMember = async (req: AuthRequest, res: Response): Promise
 };
 
 // Delete team member
-export const deleteTeamMember = async (req: AuthRequest, res: Response): Promise<void> => {
+export const deleteTeamMember = async (req, res): Promise<void> => {
   try {
-    const userId = req.user?.id;
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
     const { id } = req.params;
     
     if (!userId) {
@@ -342,9 +347,10 @@ export const deleteTeamMember = async (req: AuthRequest, res: Response): Promise
 };
 
 // Get team insights
-export const getTeamInsights = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getTeamInsights = async (req, res): Promise<void> => {
   try {
-    const userId = req.user?.id;
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
     if (!userId) {
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;

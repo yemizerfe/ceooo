@@ -18,8 +18,8 @@ export async function fetchJira(credentials: Record<string, string>, options: Fe
   }
   const { dataType = 'projects', cursor, limit = 100 } = options;
   const apiBaseUrl = oauthConnected
-    ? `https://api.atlassian.com/ex/jira/${encodeURIComponent(cloudId!)}`
-    : baseUrl!.replace(/\/+$/, '');
+    ? `https://api.atlassian.com/ex/jira/${encodeURIComponent(cloudId ?? '')}`
+    : (baseUrl ?? '').replace(/\/+$/, '');
   const authorization = oauthConnected
     ? `Bearer ${accessToken}`
     : `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`;
@@ -40,17 +40,17 @@ async function jiraProjects(baseUrl: string, authorization: string, limit = 100)
   });
   if (!res.ok) return { success: false, data: [], count: 0, metadata: { provider: 'jira' }, error: `Jira projects returned HTTP ${res.status}` };
   const json: any = await res.json();
-  const projects = (json.values || json.projects || []).map((p) => sanitize({ id: p.id, key: p.key, name: p.name, projectTypeKey: p.projectTypeKey || null, status: p.self ? 'active' : null }));
+  const projects = (json.values || json.projects || []).map((p: any) => sanitize({ id: p.id, key: p.key, name: p.name, projectTypeKey: p.projectTypeKey || null, status: p.self ? 'active' : null }));
   return { success: true, data: projects, count: projects.length, metadata: { provider: 'jira' }, nextCursor: null };
 }
 
-async function jiraIssues(baseUrl: string, authorization: string, cursor: string | null, limit = 100): Promise<FetcherResult> {
+async function jiraIssues(baseUrl: string, authorization: string, cursor: string | null | undefined, limit = 100): Promise<FetcherResult> {
   const page = cursor ? Math.max(Number(cursor), 0) : 0;
   const jql = 'assignee=currentUser() AND status NOT IN (Closed, Done) ORDER BY priority DESC, created ASC';
   const res = await fetchWithRetry({ url: `${baseUrl}/rest/api/3/search?jql=${encodeURIComponent(jql)}&maxResults=${Math.min(limit, 100)}&startAt=${page}`, headers: { Authorization: authorization, Accept: 'application/json' } });
   if (!res.ok) return { success: false, data: [], count: 0, metadata: { provider: 'jira' }, error: `Jira issues returned HTTP ${res.status}` };
   const json: any = await res.json();
-  const issues = (json.issues || []).map((i) => {
+  const issues = (json.issues || []).map((i: any) => {
     const fields = i.fields as Record<string, unknown> || {};
     return sanitize({ id: i.id, key: i.key, summary: fields.summary || null, status: (fields.status as Record<string, unknown>)?.name || null, assignee: (fields.assignee as Record<string, unknown>)?.displayName || null, type: (fields.issuetype as Record<string, unknown>)?.name || null, priority: (fields.priority as Record<string, unknown>)?.name || null, estimate: fields.timeestimate ?? null, project: (fields.project as Record<string, unknown>)?.key || (fields.project as Record<string, unknown>)?.name || null, dueDate: fields.duedate || null, updated: fields.updated || null });
   });

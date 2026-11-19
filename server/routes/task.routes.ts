@@ -1,8 +1,8 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { requirePermission } from '../middleware/admin.middleware.js';
-import { AuthRequest } from '../middleware/auth.middleware.js';
-import { Response } from 'express';
+import type { AuthRequest } from '../middleware/auth.middleware.js';
+import type { Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 
 const router = express.Router();
@@ -10,15 +10,16 @@ const router = express.Router();
 router.use(authenticate);
 
 // GET /api/tasks — all tasks across the user's projects with filters
-router.get('/', requirePermission('projects.view'), async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/', requirePermission('projects.view'), async (req, res): Promise<void> => {
   try {
-    const userId = req.user?.id;
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
     if (!userId) {
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
     }
 
-    const { status, priority, projectId, overdue } = req.query;
+    const { status, priority, projectId, overdue } = req.query as Record<string, string>;
     const where: any = { project: { userId } };
     if (status && status !== 'ALL') where.status = status;
     if (priority && priority !== 'ALL') where.priority = priority;
@@ -53,9 +54,10 @@ router.get('/', requirePermission('projects.view'), async (req: AuthRequest, res
 router.patch(
   '/:id/status',
   requirePermission('projects.update'),
-  async (req: AuthRequest, res: Response): Promise<void> => {
+  async (req, res): Promise<void> => {
     try {
-      const userId = req.user?.id;
+      const authReq = req as AuthRequest;
+      const userId = authReq.user?.id;
       const { id } = req.params;
       if (!userId) {
         res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -94,9 +96,10 @@ router.patch(
 router.delete(
   '/:id',
   requirePermission('projects.update'),
-  async (req: AuthRequest, res: Response): Promise<void> => {
+  async (req, res): Promise<void> => {
     try {
-      const userId = req.user?.id;
+      const authReq = req as AuthRequest;
+      const userId = authReq.user?.id;
       const { id } = req.params;
       if (!userId) {
         res.status(401).json({ success: false, message: 'Unauthorized' });

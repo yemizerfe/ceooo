@@ -164,14 +164,14 @@ export class BudgetIntegrationService {
       const columns = lines[i].split(',');
       if (columns.length >= 5) {
         budgets.push({
-          name: columns[0],
-          category: columns[1],
-          allocated: parseFloat(columns[2]),
-          spent: parseFloat(columns[3]),
-          period: columns[4] as any,
-          startDate: new Date(columns[5]),
-          endDate: new Date(columns[6]),
-          department: columns[7],
+          name: columns[0] || '',
+          category: columns[1] || '',
+          allocated: parseFloat(columns[2] || '0'),
+          spent: parseFloat(columns[3] || '0'),
+          period: (columns[4] || 'MONTHLY') as any,
+          startDate: new Date(columns[5] || new Date()),
+          endDate: new Date(columns[6] || new Date()),
+          department: columns[7] || '',
           metadata: { source: 'UPLOAD' }
         });
       }
@@ -244,7 +244,7 @@ export class BudgetIntegrationService {
       
       return { imported: budgets.length, errors };
     } catch (error) {
-      errors.push(error.message);
+      errors.push(error instanceof Error ? error.message : 'Unknown error');
       return { imported: 0, errors };
     }
   }

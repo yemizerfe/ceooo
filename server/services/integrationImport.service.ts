@@ -73,8 +73,8 @@ export function parseTabularFile(buffer: Buffer, sheetName?: string): ParsedTabl
   if (!sheetNames.length) {
     throw new Error('The file has no sheets to import');
   }
-  const name = sheetName && sheetNames.includes(sheetName) ? sheetName : sheetNames[0];
-  const sheet = wb.Sheets[name];
+  const name = sheetName && sheetNames.includes(sheetName) ? sheetName : sheetNames[0]!;
+  const sheet = wb.Sheets[name]!;
   const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '', raw: false });
 
   // Strip empty rows and normalize every cell to a trimmed string.
@@ -171,7 +171,7 @@ export function suggestMapping(columns: string[], recordType: RecordType): Sugge
   const mapping: SuggestedMapping = {};
   for (const field of wanted) {
     const col = pick(columns, field as string);
-    if (col) mapping[field] = col;
+    if (col) (mapping as any)[field] = col;
   }
   return mapping;
 }

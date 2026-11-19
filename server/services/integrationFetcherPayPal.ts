@@ -7,7 +7,7 @@ import { fetchWithRetry, sanitize, resolvePayPalBase } from './integrationFetche
 import type { FetcherResult, FetchOptions } from './integrationFetcher.service.js';
 
 export async function fetchPayPal(credentials: Record<string, string>, options: FetchOptions): Promise<FetcherResult> {
-  const accessToken = credentials.accessToken;
+  const accessToken = credentials.accessToken ?? "";
   if (!accessToken) {
     return { success: false, data: [], count: 0, metadata: options.metadata || {}, error: 'No PayPal OAuth access token' };
   }
@@ -39,7 +39,7 @@ async function payPalTransactions(accessToken: string, base: string, cursor: str
   const res = await fetchWithRetry({ url, headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' } });
   if (!res.ok) return { success: false, data: [], count: 0, metadata: {}, error: `PayPal returned HTTP ${res.status}` };
   const json: any = await res.json();
-  const items = (Array.isArray(json.items) ? json.items : []).map((t) => sanitize({ id: t.id, description: t.description || null, date: t.date || null, amount: Number(t.amount || 0), currency: t.currency || null, status: t.status || null, type: t.processor_response_code?.name || t.type || null }));
+  const items = (Array.isArray(json.items) ? json.items : []).map((t: any) => sanitize({ id: t.id, description: t.description || null, date: t.date || null, amount: Number(t.amount || 0), currency: t.currency || null, status: t.status || null, type: t.processor_response_code?.name || t.type || null }));
   return {
     success: true,
     data: items,
@@ -48,3 +48,6 @@ async function payPalTransactions(accessToken: string, base: string, cursor: str
     nextCursor: String(page + 1),
   };
 }
+
+
+

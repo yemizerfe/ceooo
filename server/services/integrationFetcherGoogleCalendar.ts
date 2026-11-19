@@ -15,7 +15,7 @@ export async function fetchGoogleCalendar(credentials: Record<string, string>, o
   const res = await fetchWithRetry({ url, headers: { Authorization: `Bearer ${accessToken}` } });
   if (!res.ok) return { success: false, data: [], count: 0, metadata: {}, error: `Google Calendar returned HTTP ${res.status}` };
   const json: any = await res.json();
-  const items = (json.items || []).map((e) => sanitize({
+  const items = (json.items || []).map((e: any) => sanitize({
     id: e.id,
     title: e.summary || 'Untitled event',
     start: e.start?.dateTime || e.start?.date || null,

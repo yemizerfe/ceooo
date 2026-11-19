@@ -7,7 +7,7 @@ import { fetchWithRetry } from './integrationFetcherUtils.js';
 import type { FetcherResult, FetchOptions } from './integrationFetcher.service.js';
 
 export async function fetchGoogleDrive(credentials: Record<string, string>, options: FetchOptions): Promise<FetcherResult> {
-  const accessToken = credentials.accessToken;
+  const accessToken = credentials.accessToken || '';
   if (!accessToken) {
     return { success: false, data: [], count: 0, metadata: options.metadata || {}, error: 'No Drive OAuth access token' };
   }
@@ -24,7 +24,7 @@ export async function fetchGoogleDrive(credentials: Record<string, string>, opti
   };
 }
 
-async function listGoogleDriveFiles(accessToken: string, cursor: string | null, limit = 100): Promise<FetcherResult> {
+async function listGoogleDriveFiles(accessToken: string, cursor: string | null | undefined, limit = 100): Promise<FetcherResult> {
   const fields = 'files(id,name,mimeType,modifiedTime,size,trashed),nextPageToken';
   const url = `https://www.googleapis.com/drive/v3/files?fields=${encodeURIComponent(fields)}&pageSize=${Math.min(limit, 100)}&pageToken=${encodeURIComponent(cursor || '')}&orderBy=modifiedTime desc`;
   const res = await fetchWithRetry({ url, headers: { Authorization: `Bearer ${accessToken}` } });

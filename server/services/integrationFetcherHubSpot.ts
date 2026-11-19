@@ -23,7 +23,7 @@ async function hubSpotContacts(accessToken: string, limit = 100): Promise<Fetche
   const res = await fetchWithRetry({ url, headers: { Authorization: `Bearer ${accessToken}` } });
   if (!res.ok) return { success: false, data: [], count: 0, metadata: {}, error: `HubSpot contacts returned HTTP ${res.status}` };
   const json: any = await res.json();
-  const items = (json.results || []).map((r) => sanitize({ id: r.id, email: (r.properties?.email as string) || null, firstname: (r.properties?.firstname as string) || null, lastname: (r.properties?.lastname as string) || null, company: (r.properties?.company as string) || null }));
+  const items = (json.results || []).map((r: any) => sanitize({ id: r.id, email: (r.properties?.email as string) || null, firstname: (r.properties?.firstname as string) || null, lastname: (r.properties?.lastname as string) || null, company: (r.properties?.company as string) || null }));
   return { success: true, data: items, count: items.length, metadata: { provider: 'hubspot' }, nextCursor: null };
 }
 
@@ -32,7 +32,7 @@ async function hubSpotDeals(accessToken: string, limit = 100): Promise<FetcherRe
   const res = await fetchWithRetry({ url, headers: { Authorization: `Bearer ${accessToken}` } });
   if (!res.ok) return { success: false, data: [], count: 0, metadata: {}, error: `HubSpot deals returned HTTP ${res.status}` };
   const json: any = await res.json();
-  const items = (json.results || []).map((r) => sanitize({ id: r.id, dealname: (r.properties?.dealname as string) || null, amount: Number((r.properties?.amount as string) || 0), stageLabel: (r.properties?.stageLabel as string) || null, closedate: (r.properties?.closedate as string) || null }));
+  const items = (json.results || []).map((r: any) => sanitize({ id: r.id, dealname: (r.properties?.dealname as string) || null, amount: Number((r.properties?.amount as string) || 0), stageLabel: (r.properties?.stageLabel as string) || null, closedate: (r.properties?.closedate as string) || null }));
   return { success: true, data: items, count: items.length, metadata: { provider: 'hubspot' }, nextCursor: null };
 }
 

@@ -22,7 +22,7 @@ export async function fetchDropbox(credentials: Record<string, string>, options:
   };
 }
 
-async function dropboxListFiles(accessToken: string, cursor: string | null, limit = 100): Promise<FetcherResult> {
+async function dropboxListFiles(accessToken: string, cursor: string | null | undefined, limit = 100): Promise<FetcherResult> {
   const res = await fetchWithRetry({
     url: 'https://api.dropboxapi.com/2/files/list_folder',
     method: 'POST',
@@ -31,7 +31,7 @@ async function dropboxListFiles(accessToken: string, cursor: string | null, limi
   });
   if (!res.ok) return { success: false, data: [], count: 0, metadata: {}, error: `Dropbox returned HTTP ${res.status}` };
   const json: any = await res.json();
-  const items = (json.entries || []).map((e) => sanitize({
+  const items = (json.entries || []).map((e: any) => sanitize({
     id: e.id,
     name: e.name,
     path: e.path_display || e.path || null,

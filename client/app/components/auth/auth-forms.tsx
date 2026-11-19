@@ -30,6 +30,8 @@ import { useAuth } from "@/hooks/useAuth";
 type TabType = "login" | "signup";
 type ViewType = "auth" | "forgot-password" | "reset-password";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5010";
+
 const initialLoginData: LoginFormData = {
   email: "",
   password: "",
@@ -255,7 +257,7 @@ export function AuthForms() {
     }
 
     try {
-      const response = await fetch("/api/auth/forgot-password", {
+      const response = await fetch(`${API_URL}/api/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: forgotPasswordEmail }),

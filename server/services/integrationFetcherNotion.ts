@@ -28,7 +28,7 @@ export async function fetchNotion(credentials: Record<string, string>, options: 
   };
 }
 
-async function notionSearch(accessToken: string, cursor: string | null, limit = 100): Promise<FetcherResult> {
+async function notionSearch(accessToken: string, cursor: string | null | undefined, limit = 100): Promise<FetcherResult> {
   const url = `https://api.notion.com/v1/search?page_size=${Math.min(limit, 100)}${cursor ? `&start_cursor=${encodeURIComponent(cursor)}` : ''}`;
   const res = await fetchWithRetry({ url, headers: { Authorization: `Bearer ${accessToken}`, 'Notion-Version': '2022-06-28' } });
   if (!res.ok) return { success: false, data: [], count: 0, metadata: {}, error: `Notion search returned HTTP ${res.status}` };
@@ -55,7 +55,7 @@ async function notionSearch(accessToken: string, cursor: string | null, limit = 
   };
 }
 
-async function notionDatabases(accessToken: string, cursor: string | null, limit = 100): Promise<FetcherResult> {
+async function notionDatabases(accessToken: string, cursor: string | null | undefined, limit = 100): Promise<FetcherResult> {
   const url = `https://api.notion.com/v1/search?page_size=${Math.min(limit, 100)}&filter={property:object,value:database}${cursor ? `&start_cursor=${encodeURIComponent(cursor)}` : ''}`;
   const res = await fetchWithRetry({ url, headers: { Authorization: `Bearer ${accessToken}`, 'Notion-Version': '2022-06-28' } });
   if (!res.ok) return { success: false, data: [], count: 0, metadata: {}, error: `Notion databases returned HTTP ${res.status}` };

@@ -215,7 +215,7 @@ function collectTasks(snapshots: ProviderSnapshot[]): ExternalTask[] {
             item.assigned_to?.name,
             item.owner,
           ),
-          dueDate: isoDate(item.due_on || item.duedate || item.dueDate || item.due || item.closedate),
+          dueDate: (isoDate(item.due_on || item.duedate || item.dueDate || item.due || item.closedate) ?? null) as string | null,
           project: text(item.project?.name, item.project, item.repo, item.repository, item.board?.name, item.board),
           url: text(item.html_url, item.url),
         });

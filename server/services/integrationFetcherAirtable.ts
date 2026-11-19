@@ -13,7 +13,7 @@ export async function fetchAirtable(credentials: Record<string, string>, options
   const { dataType = 'bases', cursor, limit = 100 } = options;
   if (dataType === 'bases') return airtableBases(accessToken, limit);
   if (dataType === 'records') {
-    const baseId = options.spreadsheetId || credentials.baseId || credentials.base_id;
+    const baseId = options.spreadsheetId || credentials.baseId || credentials.base_id || '';
     if (!baseId) {
       return { success: false, data: [], count: 0, metadata: { provider: 'airtable' }, error: 'No Airtable base id. Data types: bases, records (with baseId)' };
     }
