@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePathname, useRouter } from "next/navigation";
+import { FcGoogle } from "react-icons/fc";
 import {
   AlertCircle,
   ArrowLeft,
@@ -73,6 +74,7 @@ export function AuthForms() {
     const message = params.get("message");
     const email = params.get("email");
     const oauthResult = params.get("oauth");
+    const oauthReason = params.get("reason");
 
     if (oauthResult) {
       // Cancelling a provider's consent screen lands here with `?oauth=cancelled`.
@@ -81,7 +83,11 @@ export function AuthForms() {
         setAuthNotice(
           oauthResult === "cancelled"
             ? "Sign-in was cancelled — you're back on the page you left off."
-            : "That sign-in could not be completed. Please try again."
+            : oauthReason === "invalid_oauth_state"
+              ? "Google couldn't verify this sign-in request. Please try again."
+              : oauthReason === "google_oauth_failed"
+                ? "Google returned to the app, but sign-in failed while validating your account. Please try again."
+                : "That sign-in could not be completed. Please try again."
         );
       });
       params.delete("oauth");
@@ -351,6 +357,19 @@ export function AuthForms() {
           </div>
         </div>
 
+        <a
+          href={`${API_URL}/api/auth/google?returnTo=${encodeURIComponent(pathname || "/signin")}`}
+          className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+        >
+          <FcGoogle className="h-5 w-5" aria-hidden="true" />
+          Continue with Google
+        </a>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span className="h-px flex-1 bg-border" />
+          <span>or use email</span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
+
         {authNotice ? (
           <Alert className="border-blue-200 bg-blue-50 text-blue-700">
             <AlertCircle className="h-4 w-4" />
@@ -588,7 +607,7 @@ export function AuthForms() {
 
             <CardContent className="px-6 pb-2">{renderAuthContent()}</CardContent>            <CardFooter className="px-6 py-4 border-t bg-muted/30">
               <p className="text-center text-xs text-muted-foreground">
-                Use your email and password to sign in.
+                Use Google or your email and password.
               </p>
             </CardFooter>
           </Card>

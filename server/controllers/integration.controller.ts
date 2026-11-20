@@ -322,7 +322,7 @@ export class IntegrationController {
       res.cookie(oauth1CookieName(provider.id), pending, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         path: '/',
         maxAge: OAUTH1_PENDING_TTL_MS,
       });

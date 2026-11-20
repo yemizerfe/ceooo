@@ -144,6 +144,7 @@ export default function IntegrationsPage() {
     try {
       const res = await fetch(`${API_URL}/api/integrations/oauth/${p.id}/start`, {
         method: "POST",
+        credentials: "include",
         headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           returnTo: `${window.location.pathname}${window.location.search}${window.location.hash}`,

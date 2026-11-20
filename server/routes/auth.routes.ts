@@ -124,6 +124,11 @@ function sendOAuthResult(
   reason?: string,
 ) {
   const { returnTo } = readLoginState(state);
+  logger.warn('Google OAuth flow did not complete', {
+    outcome,
+    reason: reason || 'unknown',
+    returnTo,
+  });
   const destination = new URL(returnTo, publicFrontendBaseUrl());
   destination.searchParams.set('oauth', outcome);
   if (reason) destination.searchParams.set('reason', reason);
@@ -217,6 +222,9 @@ router.get('/google/callback', (req, res, next) => {
 router.get('/google/callback', (req, res, next) => {
   passport.authenticate('google', { session: false }, (error: unknown, result: any) => {
     if (error || !result) {
+      logger.error('Google OAuth callback failed', {
+        error: error instanceof Error ? error.message : 'unknown error',
+      });
       return sendOAuthResult(res, req.query.state, 'failed', 'google_oauth_failed');
     }
     if (typeof result.token !== 'string' || !result.user) {
