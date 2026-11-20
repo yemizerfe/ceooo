@@ -2,22 +2,24 @@
 
 **AI-Powered Business Management & Executive Workspace**
 
-**Live URL:** [Visit CEOOO](https://ceooo-git-main-yemizerfes-projects.vercel.app/)
+[**Live Demo**](https://ceooo-git-main-yemizerfes-projects.vercel.app/)
 
-CEOOO is a business management platform that brings executive dashboards, financial insights, business tools, and third-party integrations into a unified workspace. It combines centralized business information with AI-assisted analysis to support business operations and decision-making.
+CEOOO is an executive business management platform designed to bring business operations, financial information, analytics, and third-party integrations into one centralized workspace.
+
+It combines interactive dashboards, AI-assisted insights, and business tools to help executives monitor performance, manage information, and make informed decisions.
 
 ## Features
 
-- **Executive Dashboard** – Centralized overview of business activities and key information.
-- **Financial Overview** – Access and review financial information through interactive dashboards.
-- **AI Assistant** – Ask questions about available business information and receive AI-generated insights.
-- **Business Intelligence** – Explore business information through visualizations, summaries, and analytics.
-- **Third-party Integrations** – Connect external business applications and access their information.
-- **Integration Management** – Manage connected services and monitor their connection status.
+- **Executive Dashboard** – Centralized visibility into business activities, performance, and key metrics.
+- **Financial Management** – Interactive financial dashboards for reviewing business financial information.
+- **AI Assistant** – AI-powered assistance for exploring business data and generating insights.
+- **Business Intelligence** – Visual analytics, summaries, and data-driven insights.
+- **Third-Party Integrations** – Connect external business platforms and access integrated information.
+- **Integration Management** – Manage connected applications and monitor their connection status.
 
 ## Integrations
 
-CEOOO includes integrations with external business platforms:
+CEOOO is designed to integrate with external business services, including:
 
 - Salesforce
 - HubSpot
@@ -26,31 +28,39 @@ CEOOO includes integrations with external business platforms:
 - Asana
 - Microsoft services
 
-Availability depends on the implementation status and permissions configured for each provider.
+Integration availability depends on implementation status and provider configuration.
 
 ## Technology Stack
 
-- Next.js
-- React
-- TypeScript
-- Tailwind CSS
-- shadcn/ui
-- Zustand
-- Framer Motion
-- GSAP
-- Node.js
-- REST APIs
-- OAuth 2.0
-- Docker
+| Category | Technologies |
+|---|---|
+| Frontend | Next.js, React, TypeScript |
+| UI & Styling | Tailwind CSS, shadcn/ui |
+| State Management | Zustand |
+| Animations | Framer Motion, GSAP |
+| Backend | Node.js, REST APIs |
+| Authentication | OAuth 2.0 |
+| Infrastructure | Docker |
+| Database | PostgreSQL, Prisma |
 
-## Running Locally
+## Project Structure
 
-CEOOO uses Docker Compose for containerized deployment.
+```text
+ceooo/
+├── client/       # Next.js frontend application
+├── server/       # Express backend and API
+└── README.md
+```
+
+The client and server are maintained as independent applications. The frontend communicates with the backend through HTTP APIs.
+
+## Getting Started
 
 ### Prerequisites
 
 - Docker
 - Docker Compose
+- Git
 
 ### Installation
 
@@ -61,62 +71,80 @@ git clone https://github.com/yemizerfe/ceooo.git
 cd ceooo
 ```
 
-### Configuration
+### Environment Configuration
 
-**Private environment configuration is not included in this repository.**
+Private environment configuration is not included in the repository.
 
-CEOOO does not distribute its `.env` files, API keys, OAuth credentials, database credentials, JWT secrets, or other private application configuration.
+Before running the application, configure your own:
 
-To run your own instance:
+- Database credentials and connection URLs
+- JWT and session secrets
+- Frontend and backend URLs
+- AI service credentials
+- OAuth application credentials
+- Third-party integration settings
 
-1. Review the available Docker Compose configuration.
-2. Configure the required environment variables using your own credentials.
-3. Configure your own database and external service accounts.
-4. Set up the required OAuth applications and callback URLs.
-5. Start the application using Docker Compose.
+Do not commit `.env` files, API keys, access tokens, or other sensitive configuration.
 
-### Start the Application
+### Run with Docker Compose
+
+Build and start the application:
 
 ```bash
 docker compose up --build -d
 ```
 
-To view running containers:
+View running containers:
 
 ```bash
 docker compose ps
 ```
 
-To inspect application logs:
+View application logs:
 
 ```bash
 docker compose logs -f
 ```
 
-To stop the application:
+Stop the application:
 
 ```bash
 docker compose down
 ```
 
-Refer to the Docker Compose configuration and application requirements for the environment variables and services required by your deployment.
+## Deployment
 
-## Deploying the client and the server separately
+The frontend and backend are deployed independently.
 
-`client/` and `server/` are two independent deployments. Each folder is built and run from its own root and does not reference files in the other:
+### Backend Deployment
 
-| Folder | What it contains | Build | Start |
-| --- | --- | --- | --- |
-| `server/` | Express API, Prisma schema and migrations, AI services, third-party integrations | `bun install` | `bun run start` |
-| `client/` | Next.js frontend (pages, components, stores, browser-side helpers) | `npm ci && npm run build` | `npm start` |
+The backend is an Express application using Bun and Prisma.
 
-Every HTTP endpoint lives in `server/`. The client has no API routes of its own; it calls the API over HTTP at `NEXT_PUBLIC_API_URL`.
+- Install dependencies with `bun install`.
+- Configure the required environment variables.
+- Set up the PostgreSQL database.
+- Apply database migrations using `bunx prisma migrate deploy`.
+- Start the application using `bun run start`.
 
-**Server site** — set `DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET`, `SESSION_SECRET` and `FRONTEND_URL` (the public URL of the client site). `DATABASE_URL` can use the database provider's pooled endpoint for application traffic; `DIRECT_URL` must be its direct, non-pooled PostgreSQL connection for Prisma migrations and schema operations. Set `BACKEND_URL` or `API_PUBLIC_URL` to the public API origin; Render's `RENDER_EXTERNAL_URL` is also detected automatically. If the client is reachable from more than one origin (preview deployments, custom domains), list them in `CORS_ORIGINS`. Apply migrations on release with `bunx prisma migrate deploy`.
+Required configuration includes `DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET`, `SESSION_SECRET`, and `FRONTEND_URL`.
 
-**Client site** — set `NEXT_PUBLIC_API_URL` to the public URL of the API site. It is compiled in at build time, so rebuild after changing it. Production builds fail with a clear error if it is missing, rather than silently sending API requests to localhost.
+### Frontend Deployment
 
-The deployment environment variables are configured in the hosting provider's settings; `.env` files are only for local development and are not committed. For Google sign-in, `GOOGLE_CALLBACK_URL` is optional and defaults to `${BACKEND_URL}/api/auth/google/callback` (or Render's detected API URL). Register that exact callback URL in the Google OAuth client. After sign-in, the API redirects to `FRONTEND_URL/auth/callback`. If the API domain changes, update the Google OAuth client's allowed callback URL as well.
+The frontend is a Next.js application.
+
+- Install dependencies with `npm ci`.
+- Configure `NEXT_PUBLIC_API_URL` with the public backend URL.
+- Build the application with `npm run build`.
+- Start it using `npm start`.
+
+`NEXT_PUBLIC_API_URL` is compiled into the frontend during the build process. Rebuild the application whenever this value changes.
+
+## Security & Configuration
+
+- Environment files and private credentials are excluded from the repository.
+- OAuth credentials are configured through provider applications.
+- Database migrations are managed with Prisma.
+- Each deployment uses its own environment configuration.
 
 ## License
 
