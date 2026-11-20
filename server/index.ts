@@ -31,6 +31,7 @@ import { rateLimit } from './middleware/rateLimit.middleware.js';
 import { logger } from './lib/logger.js';
 import { withGracefulShutdown } from './lib/graceful-shutdown.js';
 import { publicFrontendBaseUrl } from './lib/deploymentUrls.js';
+import { ensureRbacCatalog } from './services/rbac.service.js';
 
 const app = express();
 const allowedOrigins = new Set(
@@ -116,6 +117,8 @@ const port = Number(process.env.PORT || 5010);
 if (!Number.isInteger(port) || port < 0 || port > 65535) {
   throw new Error('PORT must be a valid TCP port.');
 }
+
+await ensureRbacCatalog();
 
 export const server = app.listen(port, () => {
   const address = server.address();
