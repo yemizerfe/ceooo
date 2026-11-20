@@ -2,7 +2,7 @@
 
 **AI-Powered Business Management & Executive Workspace**
 
-
+**Live URL:** [Visit CEOOO](https://ceooo-git-main-yemizerfes-projects.vercel.app/)
 
 CEOOO is a business management platform that brings executive dashboards, financial insights, business tools, and third-party integrations into a unified workspace. It combines centralized business information with AI-assisted analysis to support business operations and decision-making.
 
@@ -117,8 +117,6 @@ Every HTTP endpoint lives in `server/`. The client has no API routes of its own;
 **Client site** — set `NEXT_PUBLIC_API_URL` to the public URL of the API site. It is compiled in at build time, so rebuild after changing it. Production builds fail with a clear error if it is missing, rather than silently sending API requests to localhost.
 
 The deployment environment variables are configured in the hosting provider's settings; `.env` files are only for local development and are not committed. For Google sign-in, `GOOGLE_CALLBACK_URL` is optional and defaults to `${BACKEND_URL}/api/auth/google/callback` (or Render's detected API URL). Register that exact callback URL in the Google OAuth client. After sign-in, the API redirects to `FRONTEND_URL/auth/callback`. If the API domain changes, update the Google OAuth client's allowed callback URL as well.
-
-
 
 ## License
 
