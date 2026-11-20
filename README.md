@@ -112,32 +112,6 @@ Stop the application:
 docker compose down
 ```
 
-## Deployment
-
-The frontend and backend are deployed independently.
-
-### Backend Deployment
-
-The backend is an Express application using Bun and Prisma.
-
-- Install dependencies with `bun install`.
-- Configure the required environment variables.
-- Set up the PostgreSQL database.
-- Apply database migrations using `bunx prisma migrate deploy`.
-- Start the application using `bun run start`.
-
-Required configuration includes `DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET`, `SESSION_SECRET`, and `FRONTEND_URL`.
-
-### Frontend Deployment
-
-The frontend is a Next.js application.
-
-- Install dependencies with `npm ci`.
-- Configure `NEXT_PUBLIC_API_URL` with the public backend URL.
-- Build the application with `npm run build`.
-- Start it using `npm start`.
-
-`NEXT_PUBLIC_API_URL` is compiled into the frontend during the build process. Rebuild the application whenever this value changes.
 
 ## Security & Configuration
 
