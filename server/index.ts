@@ -30,10 +30,11 @@ import { errorHandler, liveness, metrics, readiness, requestLogger } from './mid
 import { rateLimit } from './middleware/rateLimit.middleware.js';
 import { logger } from './lib/logger.js';
 import { withGracefulShutdown } from './lib/graceful-shutdown.js';
+import { publicFrontendBaseUrl } from './lib/deploymentUrls.js';
 
 const app = express();
 const allowedOrigins = new Set(
-  [process.env.FRONTEND_URL || 'http://localhost:3000', ...(process.env.CORS_ORIGINS || '').split(',')]
+  [publicFrontendBaseUrl(), ...(process.env.CORS_ORIGINS || '').split(',')]
     .map((origin) => origin.trim().replace(/\/$/, ''))
     .filter(Boolean),
 );

@@ -7,12 +7,12 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import { logger } from '../lib/logger.ts';
 import { getPlatformSettings } from '../services/platformSettings.service.ts';
+import { publicApiBaseUrl } from '../lib/deploymentUrls.js';
 // Bun already loads .env; keep dotenv's banner out of the console.
 dotenv.config({ quiet: true });
 
-const backendBaseUrl = (process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5010}`).replace(/\/$/, '');
 const googleCallbackUrl =
-  process.env.GOOGLE_CALLBACK_URL || `${backendBaseUrl}/api/auth/google/callback`;
+  process.env.GOOGLE_CALLBACK_URL || `${publicApiBaseUrl()}/api/auth/google/callback`;
 
 export const googleOAuthConfigured = Boolean(
   process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,

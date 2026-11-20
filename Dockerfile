@@ -2,7 +2,7 @@
 
 # Build with:
 #   docker build --target server -t ceooo-server .
-#   docker build --target client --build-arg NEXT_PUBLIC_API_URL=https://api.example.com -t ceooo-client .
+#   docker build --target client --build-arg NEXT_PUBLIC_API_URL=https://your-api-host -t ceooo-client .
 
 # Install only runtime dependencies; the server runs TypeScript directly with Bun.
 FROM oven/bun:1.2-alpine AS server-deps
@@ -57,7 +57,7 @@ RUN --mount=type=cache,target=/root/.npm \
     npm ci --no-audit --no-fund --prefer-offline
 
 FROM client-deps AS client-build
-ARG NEXT_PUBLIC_API_URL=http://localhost:5010
+ARG NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1 \
     NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 COPY client ./

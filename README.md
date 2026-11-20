@@ -112,11 +112,11 @@ Refer to the Docker Compose configuration and application requirements for the e
 
 Every HTTP endpoint lives in `server/`. The client has no API routes of its own; it calls the API over HTTP at `NEXT_PUBLIC_API_URL`.
 
-**Server site** — set `DATABASE_URL`, `JWT_SECRET`, `SESSION_SECRET` and `FRONTEND_URL` (the public URL of the client site). If the client is reachable from more than one origin (preview deployments, custom domains), list them in `CORS_ORIGINS`. Apply migrations on release with `bunx prisma migrate deploy`.
+**Server site** — set `DATABASE_URL`, `JWT_SECRET`, `SESSION_SECRET` and `FRONTEND_URL` (the public URL of the client site). Set `BACKEND_URL` or `API_PUBLIC_URL` to the public API origin; Render's `RENDER_EXTERNAL_URL` is also detected automatically. If the client is reachable from more than one origin (preview deployments, custom domains), list them in `CORS_ORIGINS`. Apply migrations on release with `bunx prisma migrate deploy`.
 
-**Client site** — set `NEXT_PUBLIC_API_URL` to the public URL of the API site. It is compiled in at build time, so rebuild after changing it.
+**Client site** — set `NEXT_PUBLIC_API_URL` to the public URL of the API site. It is compiled in at build time, so rebuild after changing it. Production builds fail with a clear error if it is missing, rather than silently sending API requests to localhost.
 
-For OAuth sign-in, the provider callbacks point at the API site and the API redirects back to `FRONTEND_URL/auth/callback`, so both values must be the public URLs of the two deployments.
+The deployment environment variables are configured in the hosting provider's settings; `.env` files are only for local development and are not committed. For Google sign-in, `GOOGLE_CALLBACK_URL` is optional and defaults to `${BACKEND_URL}/api/auth/google/callback` (or Render's detected API URL). Register that exact callback URL in the Google OAuth client. After sign-in, the API redirects to `FRONTEND_URL/auth/callback`. If the API domain changes, update the Google OAuth client's allowed callback URL as well.
 
 
 

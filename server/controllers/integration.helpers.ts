@@ -5,21 +5,17 @@ import { createHmac } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma.js';
 import { decryptSecret, readCredentialBlob } from '../lib/crypto.js';
+import { integrationApiBaseUrl, publicFrontendBaseUrl } from '../lib/deploymentUrls.js';
 import type { Provider } from '../integrations/providers.js';
 
 // ── URL helpers ──────────────────────────────────────────────────────────────
 
 export function apiBaseUrl(): string {
-  return (
-    process.env.INTEGRATIONS_REDIRECT_BASE ||
-    process.env.API_PUBLIC_URL ||
-    process.env.BACKEND_URL ||
-    `http://localhost:${process.env.PORT || 5010}`
-  ).replace(/\/$/, '');
+  return integrationApiBaseUrl();
 }
 
 export function frontendUrl(): string {
-  return (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+  return publicFrontendBaseUrl();
 }
 
 export function safeFrontendReturnTo(value: unknown): string {

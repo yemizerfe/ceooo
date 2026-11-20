@@ -2,6 +2,13 @@ import type { NextConfig } from "next";
 import { networkInterfaces } from "node:os";
 
 const isProd = process.env.NODE_ENV === "production";
+const apiUrl = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
+
+if (isProd && !apiUrl) {
+  throw new Error(
+    "Set NEXT_PUBLIC_API_URL to the public API origin in the frontend deployment environment."
+  );
+}
 
 /**
  * Hosts allowed to talk to the dev server. Next.js otherwise rejects requests
@@ -48,7 +55,7 @@ const nextConfig: NextConfig = {
   ...(isProd ? {} : { allowedDevOrigins: devOrigins() }),
 
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_API_URL: apiUrl,
   },
 
   async headers() {

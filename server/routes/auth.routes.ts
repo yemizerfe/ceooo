@@ -12,6 +12,7 @@ import { IntegrationController } from '../controllers/integration.controller.js'
 import { googleOAuthConfigured } from '../config/passport.js';
 import { logger } from '../lib/logger.js';
 import { getPlatformSettings } from '../services/platformSettings.service.js';
+import { publicFrontendBaseUrl } from '../lib/deploymentUrls.js';
 
 const router = Router();
 const OAUTH_HANDOFF_COOKIE = 'ceooo.oauth_handoff';
@@ -37,10 +38,6 @@ function oauthCookieOptions() {
   };
 }
 
-function frontendBaseUrl(): string {
-  return (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-}
-
 /**
  * Only same-site absolute paths are allowed as an OAuth return target, so a
  * crafted `?returnTo=` can never turn the callback into an open redirect.
@@ -50,8 +47,8 @@ function safeReturnTo(value: unknown): string {
     return '/dashboard';
   }
   try {
-    const destination = new URL(value, frontendBaseUrl());
-    if (destination.origin !== new URL(frontendBaseUrl()).origin) return '/dashboard';
+    const destination = new URL(value, publicFrontendBaseUrl());
+    if (destination.origin !== new URL(publicFrontendBaseUrl()).origin) return '/dashboard';
     return `${destination.pathname}${destination.search}${destination.hash}`;
   } catch {
     return '/dashboard';
@@ -127,7 +124,7 @@ function sendOAuthResult(
   reason?: string,
 ) {
   const { returnTo } = readLoginState(state);
-  const destination = new URL(returnTo, frontendBaseUrl());
+  const destination = new URL(returnTo, publicFrontendBaseUrl());
   destination.searchParams.set('oauth', outcome);
   if (reason) destination.searchParams.set('reason', reason);
   return res.redirect(destination.toString());
@@ -162,7 +159,7 @@ function completeOAuthLogin(res: any, state: unknown, token: string, user: unkno
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.cookie(OAUTH_HANDOFF_COOKIE, handoff, { ...oauthCookieOptions(), maxAge: 60_000 });
   const { returnTo } = readLoginState(state);
-  const destination = new URL('/auth/callback', frontendBaseUrl());
+  const destination = new URL('/auth/callback', publicFrontendBaseUrl());
   destination.searchParams.set('returnTo', returnTo);
   return res.redirect(destination.toString());
 }
