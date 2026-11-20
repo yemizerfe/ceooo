@@ -72,3 +72,4 @@ export async function getIntegrations(req: Request, res: Response) {
     res.status(500).json({ success: false, message: 'Failed to get integrations' });
   }
 }
+

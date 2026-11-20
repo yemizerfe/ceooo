@@ -472,3 +472,4 @@ export async function freeFetchData(appName: string, dataType: string, userId: s
 
   return { success: true, data: [], count: 0, metadata: { appName, dataType, source: 'none', note: 'No connection credentials are configured for this provider' } };
 }
+

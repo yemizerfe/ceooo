@@ -21,9 +21,10 @@ router.get('/', requirePermission('projects.view'), async (req, res): Promise<vo
 
     const { status, priority, projectId, overdue } = req.query as Record<string, string>;
     const where: any = { project: { userId } };
-    if (status && status !== 'ALL') where.status = status;
-    if (priority && priority !== 'ALL') where.priority = priority;
-    if (projectId) where.projectId = projectId;
+    if (status && status !== 'ALL') where.status = Array.isArray(status) ? status[0] : status;
+    if (priority && priority !== 'ALL') where.priority = Array.isArray(priority) ? priority[0] : priority;
+    const pidValue = Array.isArray(projectId) ? projectId[0] : projectId;
+    if (pidValue) where.projectId = pidValue;
     if (overdue === 'true') {
       where.dueDate = { lt: new Date() };
       where.status = { not: 'DONE' };
@@ -58,9 +59,15 @@ router.patch(
     try {
       const authReq = req as AuthRequest;
       const userId = authReq.user?.id;
-      const { id } = req.params;
       if (!userId) {
         res.status(401).json({ success: false, message: 'Unauthorized' });
+        return;
+      }
+
+      const idParam = req.params.id;
+      const id = Array.isArray(idParam) ? idParam[0] : idParam;
+      if (!id) {
+        res.status(400).json({ success: false, message: 'Task id is required' });
         return;
       }
 
@@ -100,9 +107,15 @@ router.delete(
     try {
       const authReq = req as AuthRequest;
       const userId = authReq.user?.id;
-      const { id } = req.params;
       if (!userId) {
         res.status(401).json({ success: false, message: 'Unauthorized' });
+        return;
+      }
+
+      const idParam = req.params.id;
+      const id = Array.isArray(idParam) ? idParam[0] : idParam;
+      if (!id) {
+        res.status(400).json({ success: false, message: 'Task id is required' });
         return;
       }
 

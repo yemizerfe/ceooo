@@ -4,9 +4,10 @@ import { AuthRequest } from '../middleware/auth.middleware.js';
 import { prisma } from '../lib/prisma.js';
 
 // Get all stakeholders for the user
-export const getStakeholders = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getStakeholders = async (req, res): Promise<void> => {
   try {
-    const userId = req.user?.id;
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
     if (!userId) {
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;

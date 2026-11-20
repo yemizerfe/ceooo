@@ -117,7 +117,8 @@ if (!Number.isInteger(port) || port < 0 || port > 65535) {
 }
 
 export const server = app.listen(port, () => {
-  logger.info('Server listening', { port: server.address() && typeof server.address() !== 'string' ? server.address().port : port });
+  const address = server.address();
+  logger.info('Server listening', { port: address && typeof address !== 'string' ? address.port : port });
 });
 export { app };
 

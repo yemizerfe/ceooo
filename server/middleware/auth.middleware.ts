@@ -4,15 +4,17 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma.ts';
 import { isTokenRevoked, revokeUserTokens } from '../lib/tokenRevocation.ts';
 
-export interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    email: string;
-  };
-  // Express 5 types params/query loosely; our routes always carry scalars.
-  params: Record<string, string>;
-  query: Record<string, string>;
+declare global {
+  namespace Express {
+    interface User {
+      id?: string;
+      email?: string;
+      [key: string]: unknown;
+    }
+  }
 }
+
+export type AuthRequest = Request<any, any, any, any>;
 
 function unauthorized(res: Response, message: string): void {
   res.status(401).json({ success: false, message });
